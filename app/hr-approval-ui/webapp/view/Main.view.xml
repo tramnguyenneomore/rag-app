@@ -1,0 +1,15 @@
+<mvc:View
+	controllerName="hrapprovalui.controller.Main"
+	xmlns:mvc="sap.ui.core.mvc"
+	xmlns="sap.m">
+	<Page
+		navButtonPress="onNavBack"
+		showNavButton="true"
+		title="main">
+		<content>
+			<VBox class="sapUiSmallMargin">
+				<Text text="Hello World!" class="sapUiMediumMarginBottom"/>
+			</VBox>
+		</content>
+	</Page>
+</mvc:View>
