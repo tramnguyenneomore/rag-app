@@ -41,7 +41,7 @@ async function storeRetrieveMessages(conversationId, messageId, message_time, us
 
             if (messageSelectStmt.length > 0) {
                 //for gpt-4 or anthropic--claude-3-sonnet models
-                if (modelName === "gpt-4" ) {
+                if (modelName === "gpt-4" || modelName === "gpt-40") {
                     messageSelectStmt.forEach(message => {
                         memoryContext.push({
                             "role": message.role,

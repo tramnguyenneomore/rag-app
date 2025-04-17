@@ -33,7 +33,7 @@ module.exports = function () {
             const chatModelName = "gpt-4";
             const embeddingModelName = "text-embedding-ada-002";
 
-            console.log(`Leveraing the following LLMs \n Chat Model:  gpt-4 \n Embedding Model: text-embedding-ada-002\n`);
+            console.log(`Leveraing the following LLMs \n Chat Model:  ${chatModelName} \n Embedding Model: ${embeddingModelName}\n`);
             //Optional. handle memory before the RAG LLM call
             const memoryContext = await storeRetrieveMessages(conversationId, messageId, message_time, user_id, user_query, Conversation, Message, chatModelName);
 
@@ -65,7 +65,7 @@ module.exports = function () {
                 5  //Optional. topK similarity search results to be fetched. Defaults to 5
             );
 
-            //parse the response object according to the respective model for your use case. For instance, lets consider the following three models.
+            //parse the response object according to the respective model for your use case
             let chatCompletionResponse = null;
             if (chatModelName === "gpt-4"){
                 chatCompletionResponse =
@@ -77,7 +77,7 @@ module.exports = function () {
             //Optional. parse other model outputs if you choose to use a different model.
             else
             {
-                throw new Error("The model supported in this application is 'gpt-4'. Please customize this application to use any model supported by CAP LLM Plugin. Please make the customization by referring to the comments.")
+                throw new Error(`The model ${chatModelName} is not supported in this application. Please customize this application to use any model supported by CAP LLM Plugin. Please make the customization by referring to the comments.`)
             }
             //Optional. handle memory after the RAG LLM call
             const responseTimestamp = new Date().toISOString();

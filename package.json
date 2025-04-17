@@ -29,7 +29,6 @@
     "@cap-js/sqlite": "^1",
     "@sap/cds-dk": "^8",
     "@sap/ux-specification": "^1.120.4",
-    "rimraf": "^3.0.2",
     "axios": "^1.5.1",
     "chai": "^4.3.10",
     "chai-as-promised": "^7.1.1",
@@ -37,7 +36,8 @@
     "chai-subset": "^1.6.0",
     "hana-cli": "^3.202312.1",
     "jest": "^29.7.0",
-    "mocha": "^10.3.0"
+    "mocha": "^10.3.0",
+    "rimraf": "^3.0.2"
   },
   "scripts": {
     "start": "cds-serve",
@@ -49,19 +49,22 @@
   "cds": {
     "requires": {
       "db": "hana",
+      "cap-llm-plugin": {
+        "impl": "cap-llm-plugin/srv/cap-llm-plugin.js"
+      },
       "gen-ai-hub": {
-        "gpt-4o-mini": {
+        "gpt-4": {
           "destinationName": "GenAIHubDestination",
-          "deploymentUrl": "/v2/inference/deployments/d132f104bc8b8dd5",
+          "deploymentUrl": "/v2/inference/deployments/d364af658d16275e",
           "resourceGroup": "default",
           "apiVersion": "2024-02-15-preview",
-          "modelName": "gpt-4o-mini"
+          "modelName": "gpt-4"
         },
         "text-embedding-ada-002": {
           "destinationName": "GenAIHubDestination",
           "deploymentUrl": "/v2/inference/deployments/dac2ba90e5027cda",
           "resourceGroup": "default",
-          "apiVersion": "2",
+          "apiVersion": "2024-02-15-preview",
           "modelName": "text-embedding-ada-002"
         }
       },
