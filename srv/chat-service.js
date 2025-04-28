@@ -1,89 +1,115 @@
 /* Main implementation file for handling chat */
 
+require('dotenv').config();
+const https = require('https');
+const axios = require('axios');
 const cds = require('@sap/cds');
 const { DELETE } = cds.ql;
 const { storeRetrieveMessages, storeModelResponse } = require('./memory-helper');
-
 
 const tableName = 'SAP_TISCE_DEMO_DOCUMENTCHUNK';
 const embeddingColumn = 'EMBEDDING';
 const contentColumn = 'TEXT_CHUNK';
 
 const systemPrompt =
-    ` You are an helpful assistant who answers user question based only on the following context enclosed in triple quotes.\n
-`;
+    `You are a helpful assistant who answers user questions based only on the following context enclosed in triple quotes.\n`;
+
+// Helper to fetch maintenance order details from OData API
+async function fetchMaintenanceOrder(orderId) {
+    const url = `https://172.16.0.64:8443/sap/opu/odata/sap/API_MAINTENANCEORDER/MaintenanceOrder('${orderId}')`;
+    const username = process.env.ODATA_API_USERNAME;
+    const password = process.env.ODATA_API_PASSWORD;
+
+    console.log(`[OData] Fetching maintenance order: ${orderId} from ${url}`);
+
+    try {
+        const response = await axios.get(url, {
+            auth: { username, password },
+            headers: { 'Accept': 'application/json' },
+            httpsAgent: new https.Agent({ rejectUnauthorized: false }) // For self-signed certs
+        });
+        console.log(`[OData] Success. Data received for order ${orderId}:`, response.data);
+        return response.data;
+    } catch (error) {
+        console.error(`[OData] Error fetching order ${orderId}:`, error.response ? error.response.data : error.message);
+        throw error;
+    }
+}
+
+// Helper to flatten order data for LLM context
+function flattenOrderData(orderData) {
+    if (!orderData) return '';
+    return Object.entries(orderData)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join('\n');
+}
 
 module.exports = function () {
 
     this.on('getChatRagResponse', async (req) => {
         try {
-            //request input data
             const { conversationId, messageId, message_time, user_id, user_query } = req.data;
             const { Conversation, Message } = this.entities;
             const capllmplugin = await cds.connect.to("cap-llm-plugin");
             console.log("***********************************************************************************************\n");
             console.log(`Received the request for RAG retrieval for the user query : ${user_query}\n`);
-            /*
-            For this sample use case we show how you can leverage the gpt model. However, you can easily customize this code to use any models supported by CAP LLM Plugin.
-            Chat Model:  gpt-4 
-            Embedding Model: text-embedding-ada-002
-            */
 
-            //set the modeName you want
             const chatModelName = "gpt-4";
             const embeddingModelName = "text-embedding-ada-002";
 
-            console.log(`Leveraing the following LLMs \n Chat Model:  ${chatModelName} \n Embedding Model: ${embeddingModelName}\n`);
-            //Optional. handle memory before the RAG LLM call
+            // Memory context
             const memoryContext = await storeRetrieveMessages(conversationId, messageId, message_time, user_id, user_query, Conversation, Message, chatModelName);
 
-            //Obtain the model configs configured in package.json
+            // Model configs
             const chatModelConfig = cds.env.requires["gen-ai-hub"][chatModelName];
             const embeddingModelConfig = cds.env.requires["gen-ai-hub"][embeddingModelName];
-            
-            /*Some models require you to pass few mandatory chat params, please check the respective model documentation to pass those params in the 'charParams' parameter. 
-            For example, AWS anthropic models requires few mandatory parameters such as anthropic_version and max_tokens, the you will need to pass those parameters in the 'chatParams' parameter of getRagResponseWithConfig(). 
-            */
 
-            /*Single method to perform the following :
-            - Embed the input query
-            - Perform similarity search based on the user query 
-            - Construct the prompt based on the system instruction and similarity search
-            - Call chat completion model to retrieve relevant answer to the user query
-            */
-            console.log("Getting the RAG retrival response from the CAP LLM Plugin!");
+            // --- OData API Integration ---
+            const orderMatch = user_query.match(/order\s*(\d+)/i);
+            let orderContext = '';
+            if (orderMatch) {
+                const orderId = orderMatch[1];
+                try {
+                    const orderData = await fetchMaintenanceOrder(orderId);
+                    orderContext = flattenOrderData(orderData.d);
+                } catch (err) {
+                    orderContext = `Could not retrieve details for order ${orderId}.`;
+                }
+            }
 
+            // --- Combine system prompt and order context ---
+            let systemPromptWithOrder = systemPrompt;
+            if (orderContext) {
+                systemPromptWithOrder += `\nOrder details:\n"""\n${orderContext}\n"""\n`;
+            }
+
+            // --- Existing RAG logic ---
             const chatRagResponse = await capllmplugin.getRagResponseWithConfig(
-                user_query,  //user query
-                tableName,   //table name containing the embeddings
-                embeddingColumn, //column in the table containing the vector embeddings
-                contentColumn, //  column in the table containing the actual content
-                systemPrompt, // system prompt for the task
-                embeddingModelConfig, //embedding model config
-                chatModelConfig, //chat model config
-                memoryContext.length > 0 ? memoryContext : undefined, //Optional.conversation memory context to be used.
-                5  //Optional. topK similarity search results to be fetched. Defaults to 5
+                user_query,
+                tableName,
+                embeddingColumn,
+                contentColumn,
+                systemPromptWithOrder, // <-- use the prompt with order data
+                embeddingModelConfig,
+                chatModelConfig,
+                memoryContext.length > 0 ? memoryContext : undefined,
+                5
             );
 
-            //parse the response object according to the respective model for your use case
             let chatCompletionResponse = null;
-            if (chatModelName === "gpt-4"){
-                chatCompletionResponse =
-                {
+            if (chatModelName === "gpt-4") {
+                chatCompletionResponse = {
                     "role": chatRagResponse.completion.choices[0].message.role,
                     "content": chatRagResponse.completion.choices[0].message.content
                 }
+            } else {
+                throw new Error(`The model ${chatModelName} is not supported in this application.`);
             }
-            //Optional. parse other model outputs if you choose to use a different model.
-            else
-            {
-                throw new Error(`The model ${chatModelName} is not supported in this application. Please customize this application to use any model supported by CAP LLM Plugin. Please make the customization by referring to the comments.`)
-            }
-            //Optional. handle memory after the RAG LLM call
+
+            // Store response and build payload
             const responseTimestamp = new Date().toISOString();
             await storeModelResponse(conversationId, responseTimestamp, chatCompletionResponse, Message, Conversation);
 
-            //build the response payload for the frontend.
             const response = {
                 "role": chatCompletionResponse.role,
                 "content": chatCompletionResponse.content,
@@ -94,12 +120,10 @@ module.exports = function () {
             return response;
         }
         catch (error) {
-            // Handle any errors that occur during the execution
             console.log('Error while generating response for user query:', error);
             throw error;
         }
-    })
-
+    });
 
     this.on('deleteChatData', async () => {
         try {
@@ -109,10 +133,9 @@ module.exports = function () {
             return "Success!"
         }
         catch (error) {
-            // Handle any errors that occur during the execution
             console.log('Error while deleting the chat content in db:', error);
             throw error;
         }
-    })
+    });
 
 }
