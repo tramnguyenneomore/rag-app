@@ -63,8 +63,9 @@ module.exports = function () {
 
       // Initialize CAP LLM plugin
       console.log('Connecting to CAP LLM plugin...');
+      let capllmplugin;
       try {
-        const capllmplugin = await cds.connect.to("cap-llm-plugin");
+        capllmplugin = await cds.connect.to("cap-llm-plugin");
         if (!capllmplugin) {
           console.error('CAP LLM plugin connection returned null');
           throw new Error('Failed to connect to CAP LLM plugin - null connection');
