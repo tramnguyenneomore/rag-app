@@ -1,8 +1,8 @@
 /* Main implementation file for handling chat */
 
 require('dotenv').config();
-const https = require('https');
 const axios = require('axios');
+const https = require('https');
 const cds = require('@sap/cds');
 const { DELETE } = cds.ql;
 const { storeRetrieveMessages, storeModelResponse } = require('./memory-helper');
@@ -20,15 +20,12 @@ async function fetchMaintenanceOrder(orderId) {
     const username = process.env.ODATA_API_USERNAME;
     const password = process.env.ODATA_API_PASSWORD;
 
-    console.log(`[OData] Fetching maintenance order: ${orderId} from ${url}`);
-
     try {
         const response = await axios.get(url, {
             auth: { username, password },
             headers: { 'Accept': 'application/json' },
             httpsAgent: new https.Agent({ rejectUnauthorized: false }) // For self-signed certs
         });
-        console.log(`[OData] Success. Data received for order ${orderId}:`, response.data);
         return response.data;
     } catch (error) {
         console.error(`[OData] Error fetching order ${orderId}:`, error.response ? error.response.data : error.message);
@@ -120,7 +117,7 @@ module.exports = function () {
             return response;
         }
         catch (error) {
-            console.log('Error while generating response for user query:', error);
+            console.error('Error while generating response for user query:', error);
             throw error;
         }
     });
@@ -133,7 +130,7 @@ module.exports = function () {
             return "Success!"
         }
         catch (error) {
-            console.log('Error while deleting the chat content in db:', error);
+            console.error('Error while deleting the chat content in db:', error);
             throw error;
         }
     });
