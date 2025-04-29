@@ -216,5 +216,23 @@ sap.ui.define([
             }
             items[items.length - 1].focus();
         },
+
+        onAfterRendering: function() {
+            var oFeedInput = this.byId("initialFeedInput");
+            if (oFeedInput && !oFeedInput._enterDelegateAdded) {
+                oFeedInput.addEventDelegate({
+                    onkeydown: function(oEvent) {
+                        // Enter without Shift submits
+                        if (oEvent.key === "Enter" && !oEvent.shiftKey) {
+                            oEvent.preventDefault();
+                            oFeedInput.firePost({ value: oFeedInput.getValue() });
+                            oFeedInput.setValue(""); // Clear input after sending
+                        }
+                        // Shift+Enter: do nothing, allow new line
+                    }
+                });
+                oFeedInput._enterDelegateAdded = true;
+            }
+        },
     });
 });

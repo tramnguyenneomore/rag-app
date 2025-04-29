@@ -30,6 +30,24 @@ sap.ui.define([
             this.oRouter.getRoute("conversation").attachPatternMatched(this.onRouteMatched, this);
         },
 
+        onAfterRendering: function() {
+            var oFeedInput = this.byId("officialFeedInput");
+            if (oFeedInput && !oFeedInput._enterDelegateAdded) {
+                oFeedInput.addEventDelegate({
+                    onkeydown: function(oEvent) {
+                        // Enter without Shift submits
+                        if (oEvent.key === "Enter" && !oEvent.shiftKey) {
+                            oEvent.preventDefault();
+                            oFeedInput.firePost({ value: oFeedInput.getValue() });
+                            oFeedInput.setValue(""); // Clear input after sending
+                        }
+                        // Shift+Enter: do nothing, allow new line
+                    }
+                });
+                oFeedInput._enterDelegateAdded = true;
+            }
+        },
+
         getUserInfo: function () {
 
             const url = this.getBaseURL() + "/user-api/currentUser";
@@ -173,7 +191,7 @@ sap.ui.define([
             const chatModel = this.getView().getModel('chatModel');
             const path = "/chatHistory";
             const chatHistories = chatModel.getProperty(path);
-            const conversationID = chatHistories[0].conversationId;
+            const conversationID = chatHistories[0]?.conversationId || "";
             const userInfoModel = this.getView().getModel('userInfo');
 
             chatModel.setProperty("/conversationId", conversationID);
