@@ -4,7 +4,7 @@ require('dotenv').config();
 const axios = require('axios');
 const https = require('https');
 const cds = require('@sap/cds');
-const { DELETE } = cds.ql;
+const { DELETE, UPDATE, SELECT } = cds.ql;
 const { storeRetrieveMessages, storeModelResponse } = require('./memory-helper');
 
 const tableName = 'SAP_TISCE_DEMO_DOCUMENTCHUNK';
@@ -63,9 +63,17 @@ module.exports = function () {
 
             // --- OData API Integration ---
             const orderMatch = user_query.match(/order\s*(\d+)/i);
-            let orderContext = '';
+            let orderId;
             if (orderMatch) {
-                const orderId = orderMatch[1];
+                orderId = orderMatch[1];
+                await UPDATE(Conversation).set({ lastOrderNumber: orderId }).where({ cID: conversationId });
+            } else {
+                const convo = await SELECT.one.from(Conversation).where({ cID: conversationId });
+                orderId = convo?.lastOrderNumber;
+            }
+
+            let orderContext = '';
+            if (orderId) {
                 try {
                     const orderData = await fetchMaintenanceOrder(orderId);
                     orderContext = flattenOrderData(orderData.d);

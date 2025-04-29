@@ -12,6 +12,7 @@ entity Conversation {
     creation_time: Timestamp;
     last_update_time: Timestamp;
     title: String;
+    lastOrderNumber: String;
     to_messages: Composition of many Message on to_messages.cID = $self;
 }
 
