@@ -11,7 +11,7 @@ sap.ui.define([
      Filter, FilterOperator, MessageToast, JSONModel, MessageBox) {
     'use strict';
     
-    return Controller.extend("hrapprovalui.controller.LeftScreen", {
+    return Controller.extend("plantopsassistant.controller.LeftScreen", {
 
         onInit: function(){
 
@@ -110,7 +110,7 @@ sap.ui.define([
         onUploadFileBtnSelect: function(oEvent){
 
             this.fileUploadFragment ??= this.loadFragment({
-                name: "hrapprovalui.view.FileUploading"
+                name: "plantopsassistant.view.FileUploading"
             });
 
             this.fileUploadFragment.then((oFragment) => oFragment.open());
@@ -124,7 +124,7 @@ sap.ui.define([
         onManageFileBtnSelect: function(){
 
             this.fileManagementFragment ??= this.loadFragment({
-                name: "hrapprovalui.view.FileManagement"
+                name: "plantopsassistant.view.FileManagement"
             });
 
             this.fileManagementFragment.then((oFragment) => oFragment.open());

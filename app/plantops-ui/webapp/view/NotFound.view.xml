@@ -1,8 +1,9 @@
 <mvc:View
-	controllerName="hrapprovalui.controller.NotFound"
+	controllerName="plantopsassistant.controller.NotFound"
 	xmlns="sap.m"
 	xmlns:mvc="sap.ui.core.mvc">
 	<IllustratedMessage
+		id="notFoundMessage"
 		title="notfound"
 		description="notfound" />
 </mvc:View>

@@ -5,7 +5,7 @@ sap.ui.define(
     function(BaseController) {
       "use strict";
   
-      return BaseController.extend("hrapprovalui.controller.App", {
+      return BaseController.extend("plantopsassistant.controller.App", {
         onInit: function() {
           sessionStorage.setItem("isDeployedVersion", "false");
         }

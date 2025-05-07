@@ -1,0 +1,16 @@
+{
+  "name": "aicore-destination",
+  "description": "SAP AI Core deployed service (generative AI hub)",
+  "url": "<AI-API-INSIDE-AI-CORE-SERVICE-KEY>",
+  "type": "HTTP",
+  "proxyType": "Internet",
+  "authentication": "OAuth2ClientCredentials",
+  "tokenServiceURL": "<TOKEN-SERVICE-URL-OF-AI-CORE-SERVICE-KEY>/oauth/token",
+  "clientId": "<YOUR-CLIENT-ID-OF-AI-CORE-SERVICE-KEY>",
+  "clientSecret": "<YOUR-CLIENT-SECRET-OF-AI-CORE-SERVICE-KEY>",
+  "additionalProperties": {
+    "URL.headers.AI-Resource-Group": "default",
+    "URL.headers.Content-Type": "application/json",
+    "HTML5.DynamicDestination": true
+  }
+} 

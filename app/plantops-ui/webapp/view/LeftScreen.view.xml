@@ -1,5 +1,5 @@
 <mvc:View xmlns:tnt="sap.tnt"
-    controllerName="hrapprovalui.controller.LeftScreen"
+    controllerName="plantopsassistant.controller.LeftScreen"
     xmlns:mvc="sap.ui.core.mvc"
     xmlns="sap.f"
     xmlns:m="sap.m"

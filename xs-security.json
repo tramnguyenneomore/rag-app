@@ -1,7 +1,7 @@
 {
-  "xsappname": "rag-quick-start-app",
+  "xsappname": "plantopsapp",
   "tenant-mode": "dedicated",
-  "description": "Security profile of called application",
+  "description": "Security profile of PlantOps Assistant",
   "scopes": [],
   "attributes": [],
   "role-templates": []

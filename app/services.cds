@@ -1,2 +1,1 @@
-
-using from './hr-approval-ui/annotations';
+using from './plantops-ui/annotations';

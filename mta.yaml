@@ -1,6 +1,6 @@
 _schema-version: "3.1"
-ID: rag-quick-start-app
-description: A simple CAP project.
+ID: plantops-assistant
+description: Plant Operations Assistant powered by AI.
 version: 1.0.0
 parameters:
   deploy_mode: html5-repo
@@ -13,14 +13,14 @@ parameters:
 
 modules:
 # --------------------- SERVER MODULE -------------------------
-  - name: rag-quick-start-app-srv
+  - name: plantops-assistant-srv
 # -------------------------------------------------------------
     type: nodejs
     path: gen/srv
     requires:
-      - name: rag-quick-start-app-auth
-      - name: rag-quick-start-app-db
-      - name: rag-quick-start-app-destination-service
+      - name: plantops-assistant-auth
+      - name: plantops-assistant-db
+      - name: plantops-assistant-destination-service
     provides:
       - name: srv-api
         properties:
@@ -38,12 +38,12 @@ modules:
         - default-env.json
 
 # -------------------- DB MODULE ------------------------------
-  - name: rag-quick-start-app-db-deployer
+  - name: plantops-assistant-db-deployer
 # -------------------------------------------------------------
     type: hdb
     path: gen/db
     requires:
-      - name: rag-quick-start-app-db
+      - name: plantops-assistant-db
     parameters:
       buildpack: nodejs_buildpack
     # build-parameters:
@@ -51,60 +51,60 @@ modules:
     #     - node_modules/
 
 # ------------------ DESTINATION CONTENT ----------------------
-  - name: rag-quick-start-app-destination-content
+  - name: plantops-assistant-destination-content
 # ------------------------------------------------------------
     type: com.sap.application.content
     requires:
-      - name: rag-quick-start-app-destination-service
+      - name: plantops-assistant-destination-service
         parameters:
           content-target: true
-      - name: rag-quick-start-app-repo-host
+      - name: plantops-assistant-repo-host
         parameters:
           service-key:
-            name: rag-quick-start-app-repo-host-key
-      - name: rag-quick-start-app-auth
+            name: plantops-assistant-repo-host-key
+      - name: plantops-assistant-auth
         parameters:
           service-key:
-            name: uaa_rag-quick-start-app-key
+            name: uaa_plantops-assistant-key
     parameters:
       content:
         instance:
           destinations:
-            - Name: hr_app_hr_approval_rag_usecase_repo_host
-              ServiceInstanceName: rag-quick-start-app-html5-app-host-service
-              ServiceKeyName: rag-quick-start-app-repo-host-key
-              sap.cloud.service: ragquickstart.app
+            - Name: plantops_assistant_repo_host
+              ServiceInstanceName: plantops-assistant-html5-app-host-service
+              ServiceKeyName: plantops-assistant-repo-host-key
+              sap.cloud.service: plantops.app
             - Authentication: OAuth2UserTokenExchange
-              Name: hr_app_uaa_hr_approval_rag_usecase
-              ServiceInstanceName: rag-quick-start-app-xsuaa-service
-              ServiceKeyName: uaa_rag-quick-start-app-key
-              sap.cloud.service: ragquickstart.app
+              Name: plantops_assistant_uaa
+              ServiceInstanceName: plantops-assistant-xsuaa-service
+              ServiceKeyName: uaa_plantops-assistant-key
+              sap.cloud.service: plantops.app
           existing_destinations_policy: ignore
     build-parameters:
       no-source: true
 
 # ------------------ APPLICATION CONTENT ----------------------
-  - name: rag-quick-start-app-app-content
+  - name: plantops-assistant-app-content
 # -------------------------------------------------------------
     type: com.sap.application.content
     path: .
     requires:
-      - name: rag-quick-start-app-repo-host
+      - name: plantops-assistant-repo-host
         parameters:
           content-target: true
     build-parameters:
       build-result: resources
       requires:
         - artifacts:
-            - hrapprovalui.zip
-          name: ragquickstartui
+            - plantopsassistant.zip
+          name: plantopsui
           target-path: resources/
 
 # ------------- APPLICATION: UI5 -------------------------
-  - name: ragquickstartui
+  - name: plantopsui
 # ------------------------------------------------------------
     type: html5
-    path: app/hr-approval-ui
+    path: app/plantops-ui
     build-parameters:
       build-result: dist
       builder: custom
@@ -115,7 +115,7 @@ modules:
         []
 
 # ------------------ App Router -------------------------------  
-  - name: rag-quick-start-app-approuter
+  - name: plantops-assistant-approuter
 # -------------------------------------------------------------
     type: approuter.nodejs
     path: app/
@@ -135,38 +135,38 @@ modules:
           name: srv-api # must be used in xs-app.json as well
           url: ~{srv-url}
           forwardAuthToken: true
-      - name: rag-quick-start-app-auth
+      - name: plantops-assistant-auth
 
 resources:
 # ------------------------------------------------------------
-  - name: rag-quick-start-app-auth
+  - name: plantops-assistant-auth
 # ------------------------------------------------------------
     type: org.cloudfoundry.managed-service
     parameters:
       path: ./xs-security.json
       service: xsuaa
       service-plan: application
-      service-name: rag-quick-start-app-xsuaa-service
+      service-name: plantops-assistant-xsuaa-service
       config:
         tenant-mode: dedicated
-        xsappname: rag-quick-start-app-${org}-${space}
+        xsappname: plantopsapp
 # ------------------------------------------------------------
-  - name: rag-quick-start-app-db
+  - name: plantops-assistant-db
 # ------------------------------------------------------------
     type: com.sap.xs.hdi-container
     parameters:
       service: hana
       service-plan: hdi-shared
 # ------------------------------------------------------------
-  - name: rag-quick-start-app-repo-host
+  - name: plantops-assistant-repo-host
 # ------------------------------------------------------------
     type: org.cloudfoundry.managed-service
     parameters:
       service: html5-apps-repo
-      service-name: rag-quick-start-app-html5-app-host-service
+      service-name: plantops-assistant-html5-app-host-service
       service-plan: app-host
 # ------------------------------------------------------------
-  - name: rag-quick-start-app-destination-service
+  - name: plantops-assistant-destination-service
 # ------------------------------------------------------------
     type: org.cloudfoundry.managed-service
     requires:
@@ -181,7 +181,7 @@ resources:
                 HTML5.DynamicDestination: true
                 HTML5.ForwardAuthToken: true
                 HTML5.Timeout: 30000
-                Name: rag-quick-start-app-srv
+                Name: plantops-assistant-srv
                 ProxyType: Internet
                 Type: HTTP
                 URL: ~{srv-api/srv-url}
@@ -193,5 +193,5 @@ resources:
             existing_destinations_policy: update
         version: 1.0.0
       service: destination
-      service-name: rag-quick-start-app-destination-service
+      service-name: plantops-assistant-destination-service
       service-plan: lite

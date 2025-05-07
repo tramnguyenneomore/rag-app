@@ -1,5 +1,5 @@
-<mvc:View 
-    controllerName="hrapprovalui.controller.InitialRightScreen"
+<mvc:View
+    controllerName="plantopsassistant.controller.OfficalRightScreen"
     xmlns="sap.m"
     xmlns:mvc="sap.ui.core.mvc"
     xmlns:f="sap.f"
@@ -7,41 +7,49 @@
 	height="100%"
 	busyIndicatorDelay="0">
 
-    <Page 
-        id="initialRightScreen"
-        showFooter="true"
-        showHeader="false"
-        floatingFooter="true"
-        class="sapUiResponsivePadding--content sapUiResponsivePadding--footer sapUiResponsivePadding--floatingFooter">
+        <Page 
+            id="officialRightScreen"
+            showFooter="true"
+            showHeader="false"
+            floatingFooter="true"
+            class="sapUiResponsivePadding--content sapUiResponsivePadding--footer sapUiResponsivePadding--floatingFooter">
 
-        <VBox id="initialRightScreenVBox">
+            <VBox 
+                id="officialRightScreenVBox">
                 <List 
-                    id="initialRightScreenVBoxList"
+                    id="officialRightScreenVBoxList"
+                    showNoData="false"
                     showSeparators="Inner"
-                    noDataText="How can I help you today ?"
-                    updateFinished=".onListUpdateFinished"
-                    items="{chatModel>/chatHistory/}"
+                    items="{
+                        path:'chatModel>/chatHistory/',
+                        sorter:{
+                            path:'message_time',
+                            descending: false
+                        }
+                    }"
                     busy="{chatModel>/isBusy}">
                     <FeedListItem 
-                        id="initialRightScreenListItem"
+                        id="_IDGenFeedListItem1"
+                        class="feedListItem"
+                        convertLinksToAnchorTags="All"
                         info="{chatModel>user_role}"
                         text="{chatModel>content}"
                         timestamp="{chatModel>message_time}"
                         icon="{chatModel>icon_path}"
                         iconInitials="{chatModel>initials}"
                         showIcon="true">
-                    </FeedListItem>   
+                    </FeedListItem>
                 </List>
             </VBox>
-
+    
         <footer>
             <OverflowToolbar
-                id="initialRightScreenOverflowToolbar"
+                id="officialRightScreenOverflowToolbar"
                 width="100%"
                 height="auto"
                 >
                 <FeedInput
-                    id="initialFeedInput"
+                    id="officialFeedInput"
                     showIcon="false"
                     placeholder="Enter your message...."
                     growing="true"

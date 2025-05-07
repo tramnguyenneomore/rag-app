@@ -1,7 +1,7 @@
 {
-  "name": "rag-quick-start-app",
+  "name": "rag-plantops-app",
   "version": "1.0.0",
-  "description": "A simple CAP project.",
+  "description": "RAG Plant Operations Assistant Application",
   "repository": "<Add your repository here>",
   "license": "UNLICENSED",
   "private": true,
@@ -42,7 +42,7 @@
   "scripts": {
     "start": "cds-serve",
     "watch-hr-approval-ui": "cds watch --open hr-approval-ui/webapp/index.html?sap-ui-xx-viewCache=false",
-    "undeploy": "cf undeploy rag-quick-start-app --delete-services --delete-service-keys --delete-service-brokers",
+    "undeploy": "cf undeploy rag-plantops-app --delete-services --delete-service-keys --delete-service-brokers",
     "build": "rimraf resources mta_archives && mbt build --mtar archive",
     "deploy": "cf deploy mta_archives/archive.mtar --retries 1"
   },

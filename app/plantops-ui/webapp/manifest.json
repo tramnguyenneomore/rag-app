@@ -1,7 +1,7 @@
 {
   "_version": "1.59.0",
   "sap.app": {
-    "id": "hrapprovalui",
+    "id": "plantopsassistant",
     "type": "application",
     "i18n": "i18n/i18n.properties",
     "applicationVersion": {
@@ -35,8 +35,8 @@
     },
     "crossNavigation": {
       "inbounds": {
-        "Chat-Display": {
-          "semanticObject": "Chat",
+        "PlantOps-Display": {
+          "semanticObject": "PlantOps",
           "action": "Display",
           "title": "{{flpTitle}}",
           "subTitle": "{{flpSubtitle}}",
@@ -88,7 +88,7 @@
       "i18n": {
         "type": "sap.ui.model.resource.ResourceModel",
         "settings": {
-          "bundleName": "hrapprovalui.i18n.i18n"
+          "bundleName": "plantopsassistant.i18n.i18n"
         }
       },
       "": {
@@ -120,7 +120,7 @@
       ]
     },
     "rootView": {
-      "viewName": "hrapprovalui.view.App",
+      "viewName": "plantopsassistant.view.App",
       "type": "XML",
       "async": true,
       "id": "App"
@@ -130,7 +130,7 @@
         "routerClass": "sap.f.routing.Router",
         "viewType": "XML",
         "async": true,
-        "viewPath": "hrapprovalui.view",
+        "path": "plantopsassistant.view",
         "controlId": "flexibleColumnLayout",
         "transition": "slide"
       },
@@ -156,7 +156,7 @@
       ],
       "targets": {
         "leftScreen":{
-          "viewId": "lefeScreenPage",
+          "viewId": "leftScreenPage",
           "viewName": "LeftScreen",
           "controlAggregation": "beginColumnPages"
         },
@@ -180,6 +180,6 @@
   },
   "sap.cloud": {
     "public": true,
-    "service": "ragquickstart.app"
+    "service": "plantops.app"
   }
 }

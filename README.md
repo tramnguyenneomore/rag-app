@@ -29,9 +29,9 @@ resourceGroupId (you generally set this while creating the ai core instance) lik
 4. Create the destination within the destination service instance in the BTP space:
 
 - For Hybrid testing, you will have to [create a destination service instance - instructions found in step 3 of hybrid testing section](#hybrid-testing) and create the below destination within the destination service in your BTP space.
-- For BTP deployment, the destination service will be created for you in the BTP space, you will have to create the below destination within the created destination service instance with the name `rag-quick-start-app-destination-service`.
+- For BTP deployment, the destination service will be created for you in the BTP space, you will have to create the below destination within the created destination service instance with the name `plantops-destination-service`.
 
-Navigate to the space in the BTP cockpit, click on the destination service instance `rag-quick-start-app-destination-service` in the instances section. Click on 'Manage Instance button'. In the 'Destinations' section, click on 'Create Destination' and create the destination with the following parameters:
+Navigate to the space in the BTP cockpit, click on the destination service instance `plantops-destination-service` in the instances section. Click on 'Manage Instance button'. In the 'Destinations' section, click on 'Create Destination' and create the destination with the following parameters:
  
 ```
 Name: aicore-destination
@@ -93,7 +93,7 @@ Refer the [documentation](https://help.sap.com/docs/sap-ai-core/sap-ai-core-serv
 ## Getting started
 
 1.  Clone this repo. 
-2.  Navigate to the `rag-quickstart-app` folder under `samples` folder.    
+2.  Navigate to the `rag-plantops-app` folder.    
 2.  Connect to subaccount using cf:      
     ` cf api <subaccount-endpoint>`    
     ` cf login`   
@@ -110,29 +110,29 @@ Note:
 
 1. Configure the UI to work for hybrid testing:
 
-  In the `app/hr-approval-ui/webapp/controller/App.controller.js`, do the following change:
+  In the `app/plantops-ui/webapp/controller/App.controller.js`, do the following change:
 
   ```
   sessionStorage.setItem("isDeployedVersion", "false");
   ```
   
-2. Create HDI container (HANA service instance) and bind it to the CAP pplication as follows:   
+2. Create HDI container (HANA service instance) and bind it to the CAP application as follows:   
     Note: Please wait for the service instance and service key creation to complete before you run the next command (which generally takes sometime).   
 
-    `cf create-service hana hdi-shared rag-quickstart-db`    
-    `cf create-service-key rag-quickstart-db  SharedDevKey`   
-    `cds bind -2  rag-quickstart-db:SharedDevKey`  
+    `cf create-service hana hdi-shared plantops-db`    
+    `cf create-service-key plantops-db  SharedDevKey`   
+    `cds bind -2  plantops-db:SharedDevKey`  
 
 3. Create and bind the destination service to the CAP application as follows (which you would have done in the pre-requisites section):  
      Note: Please wait for the service instance and service key creation to complete before you run the next command (which generally takes sometime).      
-    `cf create-service destination lite rag-quick-start-app-destination-service`  
-    `cf create-service-key rag-quick-start-app-destination-service SharedDevKey`  
-    `cds bind -2  rag-quick-start-app-destination-service:SharedDevKey`  
+    `cf create-service destination lite plantops-destination-service`  
+    `cf create-service-key plantops-destination-service SharedDevKey`  
+    `cds bind -2  plantops-destination-service:SharedDevKey`  
 
 4. Build the artifacts and deploy to SAP HANA Cloud:
 
     `cds build --production`  
-    `cds deploy --to hana:rag-quickstart-db`  
+    `cds deploy --to hana:plantops-db`  
 
 - Build server and run application:
 `cds watch --profile hybrid`
@@ -152,7 +152,7 @@ password: initial
 
 1. Configure the UI to work in BTP:
 
-  In the `app/hr-approval-ui/webapp/controller/App.controller.js`, do the following change:
+  In the `app/plantops-ui/webapp/controller/App.controller.js`, do the following change:
 
   ```
   sessionStorage.setItem("isDeployedVersion", "true");
@@ -169,9 +169,9 @@ mbt build
 cf deploy mta_archives/<mtar_filename>
 ```
 
-Note: After deployment, please ensure you complete step 2 of the pre-requisite section, particularly the step for creating the destination in the created destination service `rag-quick-start-app-destination-service`, if not already present.
+Note: After deployment, please ensure you complete step 2 of the pre-requisite section, particularly the step for creating the destination in the created destination service `plantops-destination-service`, if not already present.
 
-Note: To access the UI of the deployed BTP app, navigate to the subaccount and click on the HTML5 applications and select "hrapprovalui".
+Note: To access the UI of the deployed BTP app, navigate to the subaccount and click on the HTML5 applications and select "plantopsassistant".
 
 ![BTP-ui-link](./docs/images/BTP-login.png)
 

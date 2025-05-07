@@ -1,6 +1,6 @@
-specVersion: "2.5"
+specVersion: "2.6"
 metadata:
-  name: hrapprovalui
+  name: plantopsassistant
 type: application
 framework:
   name: OpenUI5
