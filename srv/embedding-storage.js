@@ -127,9 +127,9 @@ module.exports = function () {
       fs.writeFileSync(tempDocLocation, contentBuffer);
       console.log('Temporary PDF File restored and saved to:', tempDocLocation);
 
-      // Delete existing embeddings 
-      console.log('Deleting existing embeddings...');
-      await DELETE.from(DocumentChunk);
+      // Delete existing embeddings for this specific document
+      console.log('Deleting existing embeddings for this document...', fileNameString);
+      await DELETE.from(DocumentChunk).where({ metadata_column: { like: fileNameString } });
 
       // Load the document to langchain text loader
       console.log('Loading PDF document...');

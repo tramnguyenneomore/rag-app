@@ -28,7 +28,7 @@ entity Message {
 entity DocumentChunk
 {
     text_chunk: LargeString;
-    metadata_column: LargeString;
+    metadata_column: String(5000);
     embedding: Vector(1536);
 }
 
