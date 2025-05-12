@@ -11,9 +11,7 @@ const tableName = 'SAP_TISCE_DEMO_DOCUMENTCHUNK';
 const embeddingColumn = 'EMBEDDING';
 const contentColumn = 'TEXT_CHUNK';
 
-const systemPrompt =
-    `You are a helpful assistant who answers user questions based only on the following context enclosed in triple quotes.\n`;
-
+const systemPrompt = `You are a helpful assistant who answers user questions based on the following context enclosed in triple quotes. If the context doesn't contain relevant information to answer the question, you can help with your general knowledge, start your response with "I couldn't find any relevant information in the provided documents. Based on my general knowledge:" to make it clear to the user that you're using information outside of the provided context.\n`;
 // Helper to fetch maintenance order details from OData API
 async function fetchMaintenanceOrder(orderId) {
     const url = `https://172.16.0.64:8443/sap/opu/odata/sap/API_MAINTENANCEORDER/MaintenanceOrder('${orderId}')`;
