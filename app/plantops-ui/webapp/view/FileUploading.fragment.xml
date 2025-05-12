@@ -14,13 +14,11 @@
         uploadEnabled="true"
         showIcons="true"
         terminationEnabled="true"
-        maxFileNameLength="30"
-        maxFileSize="200"
         fileTypes="pdf"
         mediaTypes="application/pdf"
         afterItemAdded=".onAfterItemAdded"
         uploadCompleted=".onUploadCompleted"
-        mode="None"	
+        mode="None"
         items="{ 
             path:'files>/Files',
             parameters: {

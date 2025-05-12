@@ -140,12 +140,21 @@ sap.ui.define([
             console.log(oEvent);
             
             const item = oEvent.getParameter("item");
+            const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+            
+            if (item.getFileObject().size > maxSize) {
+                MessageToast.show("File size exceeds the maximum limit of 10MB");
+                this.byId("uploadSet").removeItem(item);
+                return;
+            }
+            
             this.createEntity(item)
                 .then((id) => {
                     this.uploadContent(item, id);
                 })
                 .catch((err) => {
                     console.log(err);
+                    MessageToast.show("Failed to upload file");
                 });
         },
 
