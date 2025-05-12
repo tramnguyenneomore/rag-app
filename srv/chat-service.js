@@ -143,4 +143,8 @@ module.exports = function () {
         }
     });
 
+    // Add handler for READ operation
+    this.on('READ', 'Conversation', async (req) => {
+        return await SELECT.from(this.entities.Conversation);
+    });
 }
