@@ -81,14 +81,12 @@ sap.ui.define([
         },
 
         requestConversationDelete: function (conversationID) {
-            
             const settings = {
                 url: sessionStorage.getItem("isDeployedVersion")==="true"?this.getBaseURL() + `/odata/v4/chat/Conversation(${conversationID})`:`/odata/v4/chat/Conversation(${conversationID})`,
-                //url: this.getBaseURL() + `/odata/v4/chat/Conversation(${conversationID})`,
-                //url:`/odata/v4/chat/Conversation(${conversationID})`,
                 method: "DELETE",
                 headers: {
-                    "Content-type": "application/json"
+                    "Content-type": "application/json",
+                    "Authorization": "Basic " + btoa("dummy.user@com:initial")
                 }
             }
             return new Promise((resolve, reject) => {
