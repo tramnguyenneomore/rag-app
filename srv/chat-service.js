@@ -156,33 +156,45 @@ async function handleListEquipmentByPlant(maintenance_plant) {
 }
 
 module.exports = function () {
-
     this.on('getChatRagResponse', async (req) => {
         try {
+            console.log('=== Starting getChatRagResponse ===');
             const { conversationId, messageId, message_time, user_id, user_query } = req.data;
             const { Conversation, Message } = this.entities;
+            
+            console.log('Connecting to CAP LLM plugin...');
             const capllmplugin = await cds.connect.to("cap-llm-plugin");
-            console.log("***********************************************************************************************\n");
-            console.log(`Received the request for RAG retrieval for the user query : ${user_query}\n`);
-
+            
             // --- Entity extraction using GPT-4 ---
             const { intent, equipment_name, equipment_id, maintenance_plant, subentity } = await extractEntitiesWithGPT4(user_query, capllmplugin);
             const chatModelName = "gpt-4";
+            
             // Always store the user message and retrieve memory context
             const memoryContext = await storeRetrieveMessages(conversationId, messageId, message_time, user_id, user_query, Conversation, Message, chatModelName);
             let responseText = '';
             let additionalContents = null;
-            if (intent === 'GetEquipmentNumber') {
-                responseText = await handleGetEquipmentNumber(equipment_name);
-            } else if (intent === 'GetManufacturerInfo') {
-                responseText = await handleGetManufacturerInfo(equipment_id, subentity);
-            } else if (intent === 'ListEquipmentByPlant') {
-                responseText = await handleListEquipmentByPlant(maintenance_plant);
-            } else {
-                // Fallback to LLM/RAG logic
+
+            // Try to get specific information first
+            try {
+                if (intent === 'GetEquipmentNumber' && equipment_name) {
+                    responseText = await handleGetEquipmentNumber(equipment_name);
+                } else if (intent === 'GetManufacturerInfo' && equipment_id) {
+                    responseText = await handleGetManufacturerInfo(equipment_id, subentity);
+                } else if (intent === 'ListEquipmentByPlant' && maintenance_plant) {
+                    responseText = await handleListEquipmentByPlant(maintenance_plant);
+                }
+
+                // Check if we got a valid response or if it contains error messages
+                if (!responseText || responseText.includes('Error fetching data') || responseText.includes('No data found')) {
+                    throw new Error('No specific data found');
+                }
+            } catch (error) {
+                console.log('Falling back to general knowledge due to:', error.message);
+                // Fallback to LLM/RAG logic with general knowledge
                 const embeddingModelName = "text-embedding-ada-002";
                 const chatModelConfig = cds.env.requires["gen-ai-hub"][chatModelName];
                 const embeddingModelConfig = cds.env.requires["gen-ai-hub"][embeddingModelName];
+
                 // --- OData API Integration ---
                 const orderMatch = user_query.match(/order\s*(\d+)/i);
                 let orderId;
@@ -193,6 +205,7 @@ module.exports = function () {
                     const convo = await SELECT.one.from(Conversation).where({ cID: conversationId });
                     orderId = convo?.lastOrderNumber;
                 }
+
                 let orderContext = '';
                 if (orderId) {
                     try {
@@ -202,23 +215,26 @@ module.exports = function () {
                         orderContext = `Could not retrieve details for order ${orderId}.`;
                     }
                 }
+
                 // --- Combine system prompt and order context ---
                 let systemPromptWithOrder = systemPrompt;
                 if (orderContext) {
                     systemPromptWithOrder += `\nOrder details:\n"""\n${orderContext}\n"""\n`;
                 }
+
                 // --- Existing RAG logic ---
                 const chatRagResponse = await capllmplugin.getRagResponseWithConfig(
                     user_query,
                     tableName,
                     embeddingColumn,
                     contentColumn,
-                    systemPromptWithOrder, // <-- use the prompt with order data
+                    systemPromptWithOrder,
                     embeddingModelConfig,
                     chatModelConfig,
                     memoryContext.length > 0 ? memoryContext : undefined,
                     5
                 );
+
                 let chatCompletionResponse = null;
                 if (chatModelName === "gpt-4") {
                     chatCompletionResponse = {
@@ -231,10 +247,12 @@ module.exports = function () {
                 responseText = chatCompletionResponse.content;
                 additionalContents = chatRagResponse.additionalContents;
             }
+
             // Always store the assistant's response
             const responseTimestamp = new Date().toISOString();
             const chatCompletionResponse = { role: 'assistant', content: responseText };
             await storeModelResponse(conversationId, responseTimestamp, chatCompletionResponse, Message, Conversation);
+
             return {
                 role: 'assistant',
                 content: responseText,
