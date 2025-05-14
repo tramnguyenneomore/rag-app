@@ -6,52 +6,83 @@ const https = require('https');
 const cds = require('@sap/cds');
 const { DELETE, UPDATE, SELECT } = cds.ql;
 const { storeRetrieveMessages, storeModelResponse } = require('./memory-helper');
+const xml2js = require('xml2js');
 
 const tableName = 'SAP_TISCE_DEMO_DOCUMENTCHUNK';
 const embeddingColumn = 'EMBEDDING';
 const contentColumn = 'TEXT_CHUNK';
 
 const systemPrompt = `You are a helpful assistant who answers user questions based on the following context enclosed in triple quotes. If the context doesn't contain relevant information to answer the question, you can help with your general knowledge, start your response with "I couldn't find any relevant information in the provided documents. Based on my general knowledge:" to make it clear to the user that you're using information outside of the provided context.\n`;
-// Helper to fetch maintenance order details from OData API
-async function fetchMaintenanceOrder(orderId) {
-    const url = `https://172.16.0.64:8443/sap/opu/odata/sap/API_MAINTENANCEORDER/MaintenanceOrder('${orderId}')`;
+
+// --- Dynamic OData Metadata Fetching ---
+let odataMetadataCache = null;
+let odataEntityMap = null;
+
+async function fetchODataMetadata(serviceUrl) {
     const username = process.env.ODATA_API_USERNAME;
     const password = process.env.ODATA_API_PASSWORD;
+    const response = await axios.get(`${serviceUrl}/$metadata`, {
+        auth: { username, password },
+        headers: { 'Accept': 'application/xml' },
+        httpsAgent: new https.Agent({ rejectUnauthorized: false })
+    });
+    const xml = response.data;
+    const parser = new xml2js.Parser();
+    const metadata = await parser.parseStringPromise(xml);
+    return metadata;
+}
 
-    try {
-        const response = await axios.get(url, {
-            auth: { username, password },
-            headers: { 'Accept': 'application/json' },
-            httpsAgent: new https.Agent({ rejectUnauthorized: false }) // For self-signed certs
-        });
-        return response.data;
-    } catch (error) {
-        console.error(`[OData] Error fetching order ${orderId}:`, error.response ? error.response.data : error.message);
-        throw error;
+function buildEntityMap(metadata) {
+    // This function builds a map: { EntitySetName: { properties: { ... }, ... } }
+    const schema = metadata['edmx:Edmx']['edmx:DataServices'][0].Schema.find(s => s.EntityType);
+    const entityTypes = schema.EntityType;
+    const entitySets = schema.EntityContainer[0].EntitySet;
+    const entityMap = {};
+    for (const set of entitySets) {
+        const setName = set.$.Name;
+        const typeName = set.$.EntityType.split('.').pop();
+        const entityType = entityTypes.find(e => e.$.Name === typeName);
+        if (entityType) {
+            const properties = {};
+            for (const prop of entityType.Property) {
+                properties[prop.$.Name] = {
+                    type: prop.$.Type,
+                    maxLength: prop.$.MaxLength,
+                    label: prop.$['sap:label'] || prop.$.Name
+                };
+            }
+            entityMap[setName] = {
+                typeName,
+                properties
+            };
+        }
     }
+    return entityMap;
 }
 
-// Helper to flatten order data for LLM context
-function flattenOrderData(orderData) {
-    if (!orderData) return '';
-    return Object.entries(orderData)
-        .map(([key, value]) => `${key}: ${value}`)
-        .join('\n');
+async function getODataEntityMap(serviceUrl) {
+    if (!odataEntityMap) {
+        if (!odataMetadataCache) {
+            odataMetadataCache = await fetchODataMetadata(serviceUrl);
+        }
+        odataEntityMap = buildEntityMap(odataMetadataCache);
+    }
+    return odataEntityMap;
 }
 
-// --- Entity Extraction with GPT-4 ---
-async function extractEntitiesWithGPT4(user_query, capllmplugin) {
-    const prompt = `Extract the following entities and intent from the user's question. 
-If an entity is not present, return null for that entity.
+// --- Dynamic Entity Extraction using OData Metadata ---
 
-Entities to extract:
-- intent (e.g., GetEquipmentNumber, GetManufacturerInfo, ListEquipmentByPlant)
-- equipment_name
-- equipment_id
-- maintenance_plant
-- subentity (e.g., serial_number, manufacturer_name)
+async function extractEntitiesWithDynamicMetadata(user_query, capllmplugin, entityMap) {
+    const prompt = `Extract the most relevant entity set, intent, and properties from the user's question based on the following OData metadata. 
+If a property is not present, return null for that property.
 
-Respond ONLY with a valid JSON object and nothing else.
+Available entity sets and their properties:
+${JSON.stringify(entityMap, null, 2)}
+
+Respond ONLY with a valid JSON object containing:
+1. entitySet: The most likely entity set
+2. intent: The most likely intent (e.g., Get, List, Find, Details, etc.)
+3. properties: An object containing the extracted property values
 
 User question: "${user_query}"
 JSON:`;
@@ -64,23 +95,86 @@ JSON:`;
                 { role: "system", content: "You are an expert at extracting structured data from user questions." },
                 { role: "user", content: prompt }
             ],
-            max_tokens: 150,
+            max_tokens: 200,
             temperature: 0
         }
     );
     const raw = completion.choices[0].message.content;
 
     try {
-        // Extract the first {...} block using regex
         const match = raw.match(/{[\s\S]*}/);
         if (match) {
             const parsed = JSON.parse(match[0]);
             return parsed;
         }
-        return { intent: 'Unknown' };
+        return { entitySet: null, intent: 'Unknown', properties: {} };
     } catch (err) {
         console.error(`Error parsing JSON: ${err}`);
-        return { intent: 'Unknown' };
+        return { entitySet: null, intent: 'Unknown', properties: {} };
+    }
+}
+
+// --- Dynamic Handler for Entity Queries ---
+async function handleDynamicEntityQuery(entitySet, intent, properties, entityMap) {
+    // Example: Only basic GET/List supported for now
+    if (!entitySet || !entityMap[entitySet]) throw new Error('Unknown entity set');
+    const entityInfo = entityMap[entitySet];
+    // Build OData filter string from properties
+    const filters = Object.entries(properties)
+        .filter(([k, v]) => v !== null && v !== undefined && v !== '')
+        .map(([k, v]) => `substringof('${v}', ${k})`)
+        .join(' and ');
+    const baseUrl = `https://172.16.0.64:8443/sap/opu/odata/sap/API_${entitySet.toUpperCase()}/${entitySet}`;
+    const url = filters ? `${baseUrl}?$filter=${filters}&$format=json` : `${baseUrl}?$format=json`;
+    console.log('[DEBUG] OData Query URL:', url);
+    console.log('[DEBUG] OData Filters:', filters);
+    const username = process.env.ODATA_API_USERNAME;
+    const password = process.env.ODATA_API_PASSWORD;
+    try {
+        const response = await axios.get(url, {
+            auth: { username, password },
+            headers: { 'Accept': 'application/json' },
+            httpsAgent: new https.Agent({ rejectUnauthorized: false })
+        });
+        const results = response.data?.d?.results;
+        console.log('[DEBUG] OData Results:', results);
+        if (results && results.length > 0) {
+            const entry = results[0];
+            // Try to find which property the user is asking for
+            const requestedProperty = Object.keys(properties).find(
+                key => properties[key] === null && entry[key] !== undefined && typeof entry[key] === 'string' && entry[key]
+            );
+            if (requestedProperty) {
+                // Use the label from metadata if available, otherwise the property name
+                const label = (entityInfo.properties[requestedProperty] && entityInfo.properties[requestedProperty].label) || requestedProperty;
+                // Try to show the context (other provided properties)
+                const contextFields = Object.entries(properties)
+                    .filter(([k, v]) => v && k !== requestedProperty)
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join(', ');
+                return `The ${label}${contextFields ? ` for ${contextFields}` : ''} is ${entry[requestedProperty]}.`;
+            }
+            // If only one result, show up to 5 most relevant fields
+            if (results.length === 1) {
+                const fields = Object.entries(entry)
+                    .filter(([k, v]) => typeof v === 'string' && v && !k.startsWith('__'))
+                    .slice(0, 5)
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join('\n');
+                return `Here is what I found:\n${fields}`;
+            }
+            // If multiple results, show a short list (e.g., name + key)
+            const preview = results.slice(0, 5).map(entry => {
+                const name = entry.EquipmentName || entry.Name || entry.Description || '';
+                const key = entry.Equipment || entry.ID || entry.id || '';
+                return `${name} (${key})`;
+            }).join('\n');
+            return `Found ${results.length} result(s) in ${entitySet}:\n${preview}`;
+        }
+        return `No data found in ${entitySet} for the given criteria.`;
+    } catch (error) {
+        console.error('[DEBUG] OData Error:', error.message);
+        return `Error fetching data: ${error.message}`;
     }
 }
 
@@ -162,11 +256,20 @@ module.exports = function () {
             const { conversationId, messageId, message_time, user_id, user_query } = req.data;
             const { Conversation, Message } = this.entities;
             
+            // Save order number to context if present in user query
+            const orderMatch = user_query.match(/order\s*(\d+)/i);
+            if (orderMatch) {
+                const orderId = orderMatch[1];
+                await UPDATE(Conversation).set({ lastOrderNumber: orderId }).where({ cID: conversationId });
+            }
+            
+            console.log('user_query:', user_query);
             console.log('Connecting to CAP LLM plugin...');
             const capllmplugin = await cds.connect.to("cap-llm-plugin");
             
-            // --- Entity extraction using GPT-4 ---
-            const { intent, equipment_name, equipment_id, maintenance_plant, subentity } = await extractEntitiesWithGPT4(user_query, capllmplugin);
+            // --- Entity extraction using metadata ---
+            const entityMap = await getODataEntityMap("https://172.16.0.64:8443/sap/opu/odata/sap/API_EQUIPMENT");
+            const { entitySet, intent, properties } = await extractEntitiesWithDynamicMetadata(user_query, capllmplugin, entityMap);
             const chatModelName = "gpt-4";
             
             // Always store the user message and retrieve memory context
@@ -174,14 +277,10 @@ module.exports = function () {
             let responseText = '';
             let additionalContents = null;
 
-            // Try to get specific information first
+            // Try to handle the query using entity metadata
             try {
-                if (intent === 'GetEquipmentNumber' && equipment_name) {
-                    responseText = await handleGetEquipmentNumber(equipment_name);
-                } else if (intent === 'GetManufacturerInfo' && equipment_id) {
-                    responseText = await handleGetManufacturerInfo(equipment_id, subentity);
-                } else if (intent === 'ListEquipmentByPlant' && maintenance_plant) {
-                    responseText = await handleListEquipmentByPlant(maintenance_plant);
+                if (intent !== 'Unknown') {
+                    responseText = await handleDynamicEntityQuery(entitySet, intent, properties, entityMap);
                 }
 
                 // Check if we got a valid response or if it contains error messages
@@ -189,38 +288,11 @@ module.exports = function () {
                     throw new Error('No specific data found');
                 }
             } catch (error) {
-                console.log('Falling back to general knowledge due to:', error.message);
+                console.log('[DEBUG] Fallback to general knowledge due to:', error.message);
                 // Fallback to LLM/RAG logic with general knowledge
                 const embeddingModelName = "text-embedding-ada-002";
                 const chatModelConfig = cds.env.requires["gen-ai-hub"][chatModelName];
                 const embeddingModelConfig = cds.env.requires["gen-ai-hub"][embeddingModelName];
-
-                // --- OData API Integration ---
-                const orderMatch = user_query.match(/order\s*(\d+)/i);
-                let orderId;
-                if (orderMatch) {
-                    orderId = orderMatch[1];
-                    await UPDATE(Conversation).set({ lastOrderNumber: orderId }).where({ cID: conversationId });
-                } else {
-                    const convo = await SELECT.one.from(Conversation).where({ cID: conversationId });
-                    orderId = convo?.lastOrderNumber;
-                }
-
-                let orderContext = '';
-                if (orderId) {
-                    try {
-                        const orderData = await fetchMaintenanceOrder(orderId);
-                        orderContext = flattenOrderData(orderData.d);
-                    } catch (err) {
-                        orderContext = `Could not retrieve details for order ${orderId}.`;
-                    }
-                }
-
-                // --- Combine system prompt and order context ---
-                let systemPromptWithOrder = systemPrompt;
-                if (orderContext) {
-                    systemPromptWithOrder += `\nOrder details:\n"""\n${orderContext}\n"""\n`;
-                }
 
                 // --- Existing RAG logic ---
                 const chatRagResponse = await capllmplugin.getRagResponseWithConfig(
@@ -228,7 +300,7 @@ module.exports = function () {
                     tableName,
                     embeddingColumn,
                     contentColumn,
-                    systemPromptWithOrder,
+                    systemPrompt,
                     embeddingModelConfig,
                     chatModelConfig,
                     memoryContext.length > 0 ? memoryContext : undefined,

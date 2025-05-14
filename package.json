@@ -23,7 +23,8 @@
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
     "pdfkit": "^0.14.0",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "@cap-js/sqlite": "^1",
