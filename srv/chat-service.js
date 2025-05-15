@@ -8,15 +8,33 @@ const { DELETE, UPDATE, SELECT } = cds.ql;
 const { storeRetrieveMessages, storeModelResponse } = require('./memory-helper');
 const xml2js = require('xml2js');
 
-const tableName = 'SAP_TISCE_DEMO_DOCUMENTCHUNK';
-const embeddingColumn = 'EMBEDDING';
-const contentColumn = 'TEXT_CHUNK';
+// Constants and configurations
+const API_SERVICES = {
+    EQUIPMENT: {
+        baseUrl: 'https://172.16.0.64:8443/sap/opu/odata/sap/API_EQUIPMENT',
+        name: 'Equipment',
+        keywords: ['equipment', 'machine', 'device', 'asset', 'manufacturer', 'model', 'serial number']
+    },
+    MAINTENANCE: {
+        baseUrl: 'https://172.16.0.64:8443/sap/opu/odata/sap/API_MAINTNOTIFICATION',
+        name: 'Maintenance Notification',
+        keywords: ['maintenance', 'notification', 'repair', 'service', 'issue', 'problem', 'fault']
+    }
+};
 
-const systemPrompt = `You are a helpful assistant who answers user questions based on the following context enclosed in triple quotes. If the context doesn't contain relevant information to answer the question, you can help with your general knowledge, start your response with "I couldn't find any relevant information in the provided documents. Based on my general knowledge:" to make it clear to the user that you're using information outside of the provided context.\n`;
+const CHAT_CONFIG = {
+    modelName: "gpt-4",
+    embeddingModelName: "text-embedding-ada-002",
+    tableName: 'SAP_TISCE_DEMO_DOCUMENTCHUNK',
+    embeddingColumn: 'EMBEDDING',
+    contentColumn: 'TEXT_CHUNK'
+};
+
+const systemPrompt = `You are a helpful assistant who answers user questions based on the following context enclosed in triple quotes. If the context doesn't contain relevant information to answer the question, you can help with your general knowledge, start your response with "Based on my general knowledge:" to make it clear to the user that you're using information outside of the provided context.\n`;
 
 // --- Dynamic OData Metadata Fetching ---
-let odataMetadataCache = null;
-let odataEntityMap = null;
+let odataMetadataCache = {};
+let odataEntityMap = {};
 
 async function fetchODataMetadata(serviceUrl) {
     const username = process.env.ODATA_API_USERNAME;
@@ -61,38 +79,85 @@ function buildEntityMap(metadata) {
 }
 
 async function getODataEntityMap(serviceUrl) {
-    if (!odataEntityMap) {
-        if (!odataMetadataCache) {
-            odataMetadataCache = await fetchODataMetadata(serviceUrl);
+    // Use service URL as cache key
+    const cacheKey = serviceUrl;
+    console.log('[DEBUG] Getting entity map for service:', cacheKey);
+
+    if (!odataEntityMap[cacheKey]) {
+        if (!odataMetadataCache[cacheKey]) {
+            console.log('[DEBUG] Fetching metadata for service:', cacheKey);
+            odataMetadataCache[cacheKey] = await fetchODataMetadata(serviceUrl);
         }
-        odataEntityMap = buildEntityMap(odataMetadataCache);
+        odataEntityMap[cacheKey] = buildEntityMap(odataMetadataCache[cacheKey]);
+        console.log('[DEBUG] Built entity map for service:', cacheKey);
+        console.log('[DEBUG] Available entity sets:', Object.keys(odataEntityMap[cacheKey]));
     }
-    return odataEntityMap;
+    return odataEntityMap[cacheKey];
 }
 
 // --- Dynamic Entity Extraction using OData Metadata ---
 
-async function extractEntitiesWithDynamicMetadata(user_query, capllmplugin, entityMap) {
+async function extractEntitiesWithDynamicMetadata(user_query, llmPlugin, entityMap) {
+    console.log('[DEBUG] Extracting entities for query:', user_query);
+    console.log('[DEBUG] Available entity sets:', Object.keys(entityMap));
+
+    // Build property rules from metadata
+    const propertyRules = Object.entries(entityMap).map(([entitySet, info]) => {
+        const properties = Object.entries(info.properties).map(([propName, propInfo]) => {
+            const label = propInfo.label || propName;
+            const type = propInfo.type;
+            let rule = `- ${propName} (${label}): `;
+
+            // Add type-specific rules
+            if (type.includes('String')) {
+                rule += 'Use for text descriptions and names';
+            } else if (type.includes('Number') || type.includes('Int')) {
+                rule += 'Use for numeric identifiers and quantities';
+            } else if (type.includes('DateTime')) {
+                rule += 'Use for dates and timestamps';
+            } else if (type.includes('Boolean')) {
+                rule += 'Use for yes/no conditions';
+            }
+
+            return rule;
+        }).join('\n');
+
+        return `${entitySet}:\n${properties}`;
+    }).join('\n\n');
+
     const prompt = `Extract the most relevant entity set, intent, and properties from the user's question based on the following OData metadata. 
 If a property is not present, return null for that property.
 
 Available entity sets and their properties:
 ${JSON.stringify(entityMap, null, 2)}
 
+Property Rules:
+${propertyRules}
+
 Respond ONLY with a valid JSON object containing:
-1. entitySet: The most likely entity set
+1. entitySet: The most likely entity set (e.g., "Equipment" for equipment queries, "MaintenanceNotification" for notification queries)
 2. intent: The most likely intent (e.g., Get, List, Find, Details, etc.)
 3. properties: An object containing the extracted property values
+
+IMPORTANT RULES:
+1. The entitySet name MUST match exactly one of these available entity sets: ${Object.keys(entityMap).join(', ')}
+2. Use ONLY properties that exist in the metadata for the selected entity set
+3. Pay attention to property types and labels when matching user input
+4. If multiple properties could match, prefer the one that best fits the context
+5. For maintenance notifications:
+   - Use NotificationText for issue descriptions
+   - Use TechnicalObjectDescription for equipment descriptions
+   - Use Notification for notification numbers
 
 User question: "${user_query}"
 JSON:`;
 
     const chatConfig = cds.env.requires["gen-ai-hub"]["gpt-4"];
-    const completion = await capllmplugin.getChatCompletionWithConfig(
+    const completion = await llmPlugin.getChatCompletionWithConfig(
         chatConfig,
         {
             messages: [
-                { role: "system", content: "You are an expert at extracting structured data from user questions." },
+                { role: "system", content: "You are an expert at extracting structured data from user questions. Use the provided metadata and property rules to accurately extract entities and their properties. Only use properties that exist in the metadata." },
                 { role: "user", content: prompt }
             ],
             max_tokens: 200,
@@ -100,13 +165,45 @@ JSON:`;
         }
     );
     const raw = completion.choices[0].message.content;
+    console.log('[DEBUG] Raw entity extraction response:', raw);
 
     try {
         const match = raw.match(/{[\s\S]*}/);
         if (match) {
             const parsed = JSON.parse(match[0]);
+            console.log('[DEBUG] Parsed entity extraction:', parsed);
+            console.log('[DEBUG] Checking if entitySet exists in map:', parsed.entitySet, 'Available sets:', Object.keys(entityMap));
+
+            // Validate entity set exists
+            if (!entityMap[parsed.entitySet]) {
+                console.log('[DEBUG] Entity set not found in map. Available sets:', Object.keys(entityMap));
+                // Try to find a matching entity set
+                const matchingSet = Object.keys(entityMap).find(set =>
+                    set.toLowerCase().includes(parsed.entitySet.toLowerCase()) ||
+                    parsed.entitySet.toLowerCase().includes(set.toLowerCase())
+                );
+                if (matchingSet) {
+                    console.log('[DEBUG] Found matching entity set:', matchingSet);
+                    parsed.entitySet = matchingSet;
+                }
+            }
+
+            // Validate properties exist in the metadata
+            if (parsed.entitySet && entityMap[parsed.entitySet]) {
+                const validProperties = {};
+                for (const [key, value] of Object.entries(parsed.properties)) {
+                    if (entityMap[parsed.entitySet].properties[key]) {
+                        validProperties[key] = value;
+                    } else {
+                        console.log(`[DEBUG] Property ${key} not found in metadata for ${parsed.entitySet}`);
+                    }
+                }
+                parsed.properties = validProperties;
+            }
+
             return parsed;
         }
+        console.log('[DEBUG] No valid JSON found in response');
         return { entitySet: null, intent: 'Unknown', properties: {} };
     } catch (err) {
         console.error(`Error parsing JSON: ${err}`);
@@ -115,61 +212,48 @@ JSON:`;
 }
 
 // --- Dynamic Handler for Entity Queries ---
-async function handleDynamicEntityQuery(entitySet, intent, properties, entityMap) {
-    // Example: Only basic GET/List supported for now
+async function handleDynamicEntityQuery(entitySet, intent, properties, entityMap, service) {
     if (!entitySet || !entityMap[entitySet]) throw new Error('Unknown entity set');
     const entityInfo = entityMap[entitySet];
+    
     // Build OData filter string from properties
     const filters = Object.entries(properties)
         .filter(([k, v]) => v !== null && v !== undefined && v !== '')
         .map(([k, v]) => `substringof('${v}', ${k})`)
         .join(' and ');
-    const baseUrl = `https://172.16.0.64:8443/sap/opu/odata/sap/API_${entitySet.toUpperCase()}/${entitySet}`;
+    
+    const baseUrl = `${service.baseUrl}/${entitySet}`;
     const url = filters ? `${baseUrl}?$filter=${filters}&$format=json` : `${baseUrl}?$format=json`;
+    
     console.log('[DEBUG] OData Query URL:', url);
     console.log('[DEBUG] OData Filters:', filters);
+    
     const username = process.env.ODATA_API_USERNAME;
     const password = process.env.ODATA_API_PASSWORD;
+    
     try {
         const response = await axios.get(url, {
             auth: { username, password },
             headers: { 'Accept': 'application/json' },
             httpsAgent: new https.Agent({ rejectUnauthorized: false })
         });
+        
         const results = response.data?.d?.results;
         console.log('[DEBUG] OData Results:', results);
+        
         if (results && results.length > 0) {
             const entry = results[0];
-            // Try to find which property the user is asking for
-            const requestedProperty = Object.keys(properties).find(
-                key => properties[key] === null && entry[key] !== undefined && typeof entry[key] === 'string' && entry[key]
-            );
-            if (requestedProperty) {
-                // Use the label from metadata if available, otherwise the property name
-                const label = (entityInfo.properties[requestedProperty] && entityInfo.properties[requestedProperty].label) || requestedProperty;
-                // Try to show the context (other provided properties)
-                const contextFields = Object.entries(properties)
-                    .filter(([k, v]) => v && k !== requestedProperty)
-                    .map(([k, v]) => `${k}: ${v}`)
-                    .join(', ');
-                return `The ${label}${contextFields ? ` for ${contextFields}` : ''} is ${entry[requestedProperty]}.`;
-            }
-            // If only one result, show up to 5 most relevant fields
-            if (results.length === 1) {
-                const fields = Object.entries(entry)
-                    .filter(([k, v]) => typeof v === 'string' && v && !k.startsWith('__'))
-                    .slice(0, 5)
-                    .map(([k, v]) => `${k}: ${v}`)
-                    .join('\n');
-                return `Here is what I found:\n${fields}`;
-            }
-            // If multiple results, show a short list (e.g., name + key)
-            const preview = results.slice(0, 5).map(entry => {
-                const name = entry.EquipmentName || entry.Name || entry.Description || '';
-                const key = entry.Equipment || entry.ID || entry.id || '';
-                return `${name} (${key})`;
-            }).join('\n');
-            return `Found ${results.length} result(s) in ${entitySet}:\n${preview}`;
+            
+            // Format the response in a simple, readable way
+            const relevantFields = Object.entries(entry)
+                .filter(([k, v]) => typeof v === 'string' && v && !k.startsWith('__'))
+                .map(([k, v]) => {
+                    const label = (entityInfo.properties[k] && entityInfo.properties[k].label) || k;
+                    return `${label}: ${v}`;
+                })
+                .join('\n');
+
+            return relevantFields;
         }
         return `No data found in ${entitySet} for the given criteria.`;
     } catch (error) {
@@ -210,132 +294,131 @@ async function queryEquipmentOData({ filter, single, extractField, formatList })
     }
 }
 
-// --- Refactored Handlers ---
-async function handleGetEquipmentNumber(equipment_name) {
-    return await queryEquipmentOData({
-        filter: `substringof('${equipment_name}', EquipmentName)`,
-        single: false,
-        formatList: results => `The equipment number for ${equipment_name} is ${results[0].Equipment}.`
-    });
-}
+// Helper functions
+async function getServiceConfig(capllmplugin, userQuery) {
+    console.log('[DEBUG] Determining service for query:', userQuery);
+    const prompt = `Analyze the following user query and determine which API service it's most likely related to.
+Available services:
+${Object.entries(API_SERVICES).map(([key, service]) =>
+    `${service.name} (${key}): Keywords - ${service.keywords.join(', ')}`
+).join('\n')}
 
-// --- Handler for Manufacturer Info (Name or Serial Number) ---
-async function handleGetManufacturerInfo(equipment_id, subentity) {
-    return await queryEquipmentOData({
-        filter: `Equipment='${equipment_id}',ValidityEndDate=datetime'9999-12-31T00:00:00'`,
-        single: true,
-        extractField: data => {
-            if (subentity === 'serial_number') {
-                return data.ManufacturerSerialNumber
-                    ? `The manufacturer's serial number for equipment ${equipment_id} is ${data.ManufacturerSerialNumber}.`
-                    : `No manufacturer's serial number found for equipment ${equipment_id}.`;
-            }
-            // Default: manufacturer name
-            return data.AssetManufacturerName
-                ? `The manufacturer of equipment ${equipment_id} is ${data.AssetManufacturerName}.`
-                : `No manufacturer found for equipment ${equipment_id}.`;
+User query: "${userQuery}"
+
+Respond with ONLY the service key (EQUIPMENT or MAINTENANCE) that best matches the query.`;
+
+    const chatConfig = cds.env.requires["gen-ai-hub"][CHAT_CONFIG.modelName];
+    const completion = await capllmplugin.getChatCompletionWithConfig(
+        chatConfig,
+        {
+            messages: [
+                { role: "system", content: "You are an expert at determining which service a user query belongs to." },
+                { role: "user", content: prompt }
+            ],
+            max_tokens: 50,
+            temperature: 0
         }
-    });
+    );
+
+    const serviceKey = completion.choices[0].message.content.trim();
+    console.log('[DEBUG] Service key:', serviceKey);
+    return API_SERVICES[serviceKey];
 }
 
-async function handleListEquipmentByPlant(maintenance_plant) {
-    return await queryEquipmentOData({
-        filter: `MaintenancePlant eq '${encodeURIComponent(maintenance_plant)}'`,
-        single: false,
-        formatList: results => {
-            const equipmentList = results.map(eq => `${eq.Equipment} (${eq.EquipmentName})`).join(', ');
-            return `Equipment in maintenance plant ${maintenance_plant}: ${equipmentList}`;
-        }
-    });
-}
+async function processChatQuery(req, capllmplugin, srv) {
+    const { conversationId, messageId, message_time, user_id, user_query } = req.data;
+    let responseText = '';
+    let apiResponse = '';
+    let hasValidApiResponse = false;
 
-module.exports = function () {
-    this.on('getChatRagResponse', async (req) => {
-        try {
-            console.log('=== Starting getChatRagResponse ===');
-            const { conversationId, messageId, message_time, user_id, user_query } = req.data;
-            const { Conversation, Message } = this.entities;
-            
-            // Save order number to context if present in user query
-            const orderMatch = user_query.match(/order\s*(\d+)/i);
-            if (orderMatch) {
-                const orderId = orderMatch[1];
-                await UPDATE(Conversation).set({ lastOrderNumber: orderId }).where({ cID: conversationId });
-            }
-            
-            console.log('user_query:', user_query);
-            console.log('Connecting to CAP LLM plugin...');
-            const capllmplugin = await cds.connect.to("cap-llm-plugin");
-            
-            // --- Entity extraction using metadata ---
-            const entityMap = await getODataEntityMap("https://172.16.0.64:8443/sap/opu/odata/sap/API_EQUIPMENT");
-            const { entitySet, intent, properties } = await extractEntitiesWithDynamicMetadata(user_query, capllmplugin, entityMap);
-            const chatModelName = "gpt-4";
-            
-            // Always store the user message and retrieve memory context
-            const memoryContext = await storeRetrieveMessages(conversationId, messageId, message_time, user_id, user_query, Conversation, Message, chatModelName);
-            let responseText = '';
-            let additionalContents = null;
+    try {
+        console.log('[DEBUG] Processing query:', user_query);
 
-            // Try to handle the query using entity metadata
+        // Get memory context first
+        const memoryContext = await storeRetrieveMessages(
+            conversationId,
+            messageId,
+            message_time,
+            user_id,
+            user_query,
+            srv.entities.Conversation,
+            srv.entities.Message,
+            CHAT_CONFIG.modelName
+        );
+
+        // Try API first if applicable
+        const service = await getServiceConfig(capllmplugin, user_query);
+        if (service) {
             try {
-                if (intent !== 'Unknown') {
-                    responseText = await handleDynamicEntityQuery(entitySet, intent, properties, entityMap);
-                }
-
-                // Check if we got a valid response or if it contains error messages
-                if (!responseText || responseText.includes('Error fetching data') || responseText.includes('No data found')) {
-                    throw new Error('No specific data found');
-                }
-            } catch (error) {
-                console.log('[DEBUG] Fallback to general knowledge due to:', error.message);
-                // Fallback to LLM/RAG logic with general knowledge
-                const embeddingModelName = "text-embedding-ada-002";
-                const chatModelConfig = cds.env.requires["gen-ai-hub"][chatModelName];
-                const embeddingModelConfig = cds.env.requires["gen-ai-hub"][embeddingModelName];
-
-                // --- Existing RAG logic ---
-                const chatRagResponse = await capllmplugin.getRagResponseWithConfig(
+                const entityMap = await getODataEntityMap(service.baseUrl);
+                const { entitySet, intent, properties } = await extractEntitiesWithDynamicMetadata(
                     user_query,
-                    tableName,
-                    embeddingColumn,
-                    contentColumn,
-                    systemPrompt,
-                    embeddingModelConfig,
-                    chatModelConfig,
-                    memoryContext.length > 0 ? memoryContext : undefined,
-                    5
+                    capllmplugin,
+                    entityMap
                 );
 
-                let chatCompletionResponse = null;
-                if (chatModelName === "gpt-4") {
-                    chatCompletionResponse = {
-                        "role": chatRagResponse.completion.choices[0].message.role,
-                        "content": chatRagResponse.completion.choices[0].message.content
+                if (entitySet && intent !== 'Unknown') {
+                    apiResponse = await handleDynamicEntityQuery(entitySet, intent, properties, entityMap, service);
+                    if (apiResponse && !apiResponse.includes('No data found') && !apiResponse.includes('Error fetching data')) {
+                        hasValidApiResponse = true;
                     }
-                } else {
-                    throw new Error(`The model ${chatModelName} is not supported in this application.`);
                 }
-                responseText = chatCompletionResponse.content;
-                additionalContents = chatRagResponse.additionalContents;
+            } catch (error) {
+                console.error('Error in API processing:', error.message);
             }
-
-            // Always store the assistant's response
-            const responseTimestamp = new Date().toISOString();
-            const chatCompletionResponse = { role: 'assistant', content: responseText };
-            await storeModelResponse(conversationId, responseTimestamp, chatCompletionResponse, Message, Conversation);
-
-            return {
-                role: 'assistant',
-                content: responseText,
-                messageTime: responseTimestamp,
-                additionalContents: additionalContents
-            };
         }
-        catch (error) {
-            console.error('Error while generating response for user query:', error);
-            throw error;
-        }
+
+        // Get RAG response
+        const ragPrompt = `Based on the following context and user query, provide a direct, human-friendly response.
+If the context doesn't contain relevant information, you can use your general knowledge, but start your response with "Based on my general knowledge:" to make it clear to the user.
+
+User Query: "${user_query}"
+${apiResponse ? `API Response: "${apiResponse}"` : ''}`;
+
+        const chatModelConfig = cds.env.requires["gen-ai-hub"][CHAT_CONFIG.modelName];
+        const embeddingModelConfig = cds.env.requires["gen-ai-hub"][CHAT_CONFIG.embeddingModelName];
+
+        const chatRagResponse = await capllmplugin.getRagResponseWithConfig(
+            ragPrompt,
+            CHAT_CONFIG.tableName,
+            CHAT_CONFIG.embeddingColumn,
+            CHAT_CONFIG.contentColumn,
+            systemPrompt,
+            embeddingModelConfig,
+            chatModelConfig,
+            memoryContext.length > 0 ? memoryContext : undefined,
+            5
+        );
+
+        responseText = chatRagResponse.completion.choices[0].message.content;
+
+        // Store the conversation
+        const responseTimestamp = new Date().toISOString();
+        const chatCompletionResponse = { role: 'assistant', content: responseText };
+        await storeModelResponse(conversationId, responseTimestamp, chatCompletionResponse, srv.entities.Message, srv.entities.Conversation);
+
+        return {
+            role: 'assistant',
+            content: responseText,
+            messageTime: responseTimestamp,
+            additionalContents: chatRagResponse.additionalContents
+        };
+    } catch (error) {
+        console.error('Error in chat handler:', error);
+        throw error;
+    }
+}
+
+module.exports = async function (srv) {
+    const capllmplugin = await cds.connect.to('cap-llm-plugin');
+    const db = await cds.connect.to('db');
+
+    srv.on('chat', async (req) => {
+        return await processChatQuery(req, capllmplugin, srv);
+    });
+
+    srv.on('getChatRagResponse', async (req) => {
+        return await processChatQuery(req, capllmplugin, srv);
     });
 
     this.on('deleteChatData', async () => {
@@ -351,7 +434,6 @@ module.exports = function () {
         }
     });
 
-    // Add handler for READ operation
     this.on('READ', 'Conversation', async (req) => {
         return await SELECT.from(this.entities.Conversation);
     });

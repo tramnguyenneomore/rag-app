@@ -54,6 +54,10 @@
         "impl": "cap-llm-plugin/srv/cap-llm-plugin.js"
       },
       "gen-ai-hub": {
+        "kind": "rest",
+        "credentials": {
+          "destination": "GenAIHubDestination"
+        },
         "gpt-4": {
           "destinationName": "GenAIHubDestination",
           "deploymentUrl": "/v2/inference/deployments/d364af658d16275e",
