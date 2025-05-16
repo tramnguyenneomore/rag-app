@@ -30,7 +30,7 @@ const CHAT_CONFIG = {
     contentColumn: 'TEXT_CHUNK'
 };
 
-const systemPrompt = `You are a helpful assistant who answers user questions based on the following context enclosed in triple quotes. If the context doesn't contain relevant information to answer the question, you can help with your general knowledge, start your response with "Based on my general knowledge:" to make it clear to the user that you're using information outside of the provided context.\n`;
+const systemPrompt = `You are a helpful assistant who answers user questions based on the provided context. Always respond in the same language as the user's question. If the context doesn't contain relevant information, you can use your general knowledge, but make it clear to the user that you're using information outside of the provided context.\n`;
 
 // --- Dynamic OData Metadata Fetching ---
 let odataMetadataCache = {};
@@ -369,8 +369,8 @@ async function processChatQuery(req, capllmplugin, srv) {
         }
 
         // Get RAG response
-        const ragPrompt = `Based on the following context and user query, provide a direct, human-friendly response.
-If the context doesn't contain relevant information, you can use your general knowledge, but start your response with "Based on my general knowledge:" to make it clear to the user.
+        const ragPrompt = `Based on the following context and user query, provide a direct, human-friendly response in the same language as the user's query.
+If the context doesn't contain relevant information, you can use your general knowledge, but make it clear to the user that you're using information outside of the provided context.
 
 User Query: "${user_query}"
 ${apiResponse ? `API Response: "${apiResponse}"` : ''}`;
