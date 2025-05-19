@@ -361,6 +361,9 @@ async function processChatQuery(req, capllmplugin, srv) {
                     apiResponse = await handleDynamicEntityQuery(entitySet, intent, properties, entityMap, service);
                     if (apiResponse && !apiResponse.includes('No data found') && !apiResponse.includes('Error fetching data')) {
                         hasValidApiResponse = true;
+                    } else {
+                        // If OData returns no data, set apiResponse to empty to ensure RAG response is used
+                        apiResponse = '';
                     }
                 }
             } catch (error) {
@@ -369,11 +372,13 @@ async function processChatQuery(req, capllmplugin, srv) {
         }
 
         // Get RAG response
-        const ragPrompt = `Based on the following context and user query, provide a direct, human-friendly response in the same language as the user's query.
-If the context doesn't contain relevant information, you can use your general knowledge, but make it clear to the user that you're using information outside of the provided context.
+        const ragPrompt = `Based on the following context and user query, provide a direct, human-friendly response.
+IMPORTANT: You MUST respond in the EXACT SAME LANGUAGE as the user's query, even if the context is in a different language. If the context is in another language, translate it to match the user's query language.
 
 User Query: "${user_query}"
-${apiResponse ? `API Response: "${apiResponse}"` : ''}`;
+${apiResponse ? `API Response: "${apiResponse}"` : ''}
+
+If the API response indicates no data was found, please provide a helpful response based on the available context and general knowledge. Make it clear if you're using information outside of the provided context.`;
 
         const chatModelConfig = cds.env.requires["gen-ai-hub"][CHAT_CONFIG.modelName];
         const embeddingModelConfig = cds.env.requires["gen-ai-hub"][CHAT_CONFIG.embeddingModelName];
