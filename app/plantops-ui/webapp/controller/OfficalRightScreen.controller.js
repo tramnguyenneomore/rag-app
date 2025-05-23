@@ -191,7 +191,7 @@ sap.ui.define([
             const chatModel = this.getView().getModel('chatModel');
             const path = "/chatHistory";
             const chatHistories = chatModel.getProperty(path);
-            const conversationID = chatHistories[0]?.conversationId || "";
+            const conversationID = (chatHistories[0] && chatHistories[0].conversationId) || "";
             const userInfoModel = this.getView().getModel('userInfo');
 
             chatModel.setProperty("/conversationId", conversationID);

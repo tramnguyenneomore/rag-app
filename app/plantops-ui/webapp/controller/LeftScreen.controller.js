@@ -106,11 +106,11 @@ sap.ui.define([
         },
 
         onUploadFileBtnSelect: function(oEvent){
-
-            this.fileUploadFragment ??= this.loadFragment({
-                name: "plantopsassistant.view.FileUploading"
-            });
-
+            if (!this.fileUploadFragment) {
+                this.fileUploadFragment = this.loadFragment({
+                    name: "plantopsassistant.view.FileUploading"
+                });
+            }
             this.fileUploadFragment.then((oFragment) => oFragment.open());
         },
 
@@ -120,11 +120,11 @@ sap.ui.define([
         },
 
         onManageFileBtnSelect: function(){
-
-            this.fileManagementFragment ??= this.loadFragment({
-                name: "plantopsassistant.view.FileManagement"
-            });
-
+            if (!this.fileManagementFragment) {
+                this.fileManagementFragment = this.loadFragment({
+                    name: "plantopsassistant.view.FileManagement"
+                });
+            }
             this.fileManagementFragment.then((oFragment) => oFragment.open());
         },
 
@@ -168,7 +168,7 @@ sap.ui.define([
         createEntity: function (item) {
             
             const data = {
-                ID: self.crypto.randomUUID(),
+                ID: this.generateUUID(),
                 mediaType: item.getMediaType(),
                 fileName: item.getFileName(),
                 size: item.getFileObject().size.toString(),
@@ -192,6 +192,14 @@ sap.ui.define([
                         reject(err);
                     })
             });				
+        },
+
+        generateUUID: function() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0,
+                    v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
         },
 
         uploadContent: function (item, id) {
