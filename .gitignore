@@ -35,3 +35,4 @@ dist/
 # IDEs
 .vscode
 # .idea
+aicore-destination-configured.properties

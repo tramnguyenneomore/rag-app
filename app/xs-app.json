@@ -1,10 +1,10 @@
 {
-  "welcomeFile": "app/index.html",
+  "welcomeFile": "plantops-ui/dist/index.html",
   "routes": [
     {
       "source": "^/app/(.*)$",
       "target": "$1",
-      "localDir": ".",
+      "localDir": "plantops-ui/dist",
       "cacheControl": "no-cache, no-store, must-revalidate"
     },
     {

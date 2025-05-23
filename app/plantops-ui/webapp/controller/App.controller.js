@@ -7,7 +7,7 @@ sap.ui.define(
   
       return BaseController.extend("plantopsassistant.controller.App", {
         onInit: function() {
-          sessionStorage.setItem("isDeployedVersion", "false");
+          sessionStorage.setItem("isDeployedVersion", "true");
         }
       });
     }

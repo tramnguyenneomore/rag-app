@@ -181,7 +181,7 @@ resources:
                 HTML5.DynamicDestination: true
                 HTML5.ForwardAuthToken: true
                 HTML5.Timeout: 30000
-                Name: plantops-assistant-srv
+                Name: plantops-assistant-app-srv
                 ProxyType: Internet
                 Type: HTTP
                 URL: ~{srv-api/srv-url}
