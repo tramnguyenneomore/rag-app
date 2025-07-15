@@ -5,22 +5,23 @@ version: 1.0.0
 parameters:
   deploy_mode: html5-repo
   enable-parallel-deployments: true
-# build-parameters:
-#   before-all:
-#     - builder: custom
-#       commands:
-#         - npx cds build --production
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+        - npx cds build --production
 
 modules:
-# --------------------- SERVER MODULE -------------------------
+  # --------------------- SERVER MODULE -------------------------
   - name: plantops-assistant-srv
-# -------------------------------------------------------------
+    # -------------------------------------------------------------
     type: nodejs
     path: gen/srv
     requires:
       - name: plantops-assistant-auth
       - name: plantops-assistant-db
       - name: plantops-assistant-destination-service
+      - name: rag-plantops-app-connectivity
     provides:
       - name: srv-api
         properties:
@@ -31,28 +32,33 @@ modules:
       disk-quota: 1024M
       memory: 512M
     build-parameters:
-      builder: npm
+      builder: custom
+      commands:
+        - npm root
       ignore:
         - .env
-        # - node_modules/
+        - node_modules/
         - default-env.json
 
-# -------------------- DB MODULE ------------------------------
+  # -------------------- DB MODULE ------------------------------
   - name: plantops-assistant-db-deployer
-# -------------------------------------------------------------
+    # -------------------------------------------------------------
     type: hdb
     path: gen/db
     requires:
       - name: plantops-assistant-db
     parameters:
       buildpack: nodejs_buildpack
-    # build-parameters:
-    #   ignore:
-    #     - node_modules/
+    build-parameters:
+      builder: custom
+      commands:
+        - npm root
+      ignore:
+        - node_modules/
 
-# ------------------ DESTINATION CONTENT ----------------------
+    # ------------------ DESTINATION CONTENT ----------------------
   - name: plantops-assistant-destination-content
-# ------------------------------------------------------------
+    # ------------------------------------------------------------
     type: com.sap.application.content
     requires:
       - name: plantops-assistant-destination-service
@@ -83,9 +89,9 @@ modules:
     build-parameters:
       no-source: true
 
-# ------------------ APPLICATION CONTENT ----------------------
+  # ------------------ APPLICATION CONTENT ----------------------
   - name: plantops-assistant-app-content
-# -------------------------------------------------------------
+    # -------------------------------------------------------------
     type: com.sap.application.content
     path: .
     requires:
@@ -100,9 +106,9 @@ modules:
           name: plantopsui
           target-path: resources/
 
-# ------------- APPLICATION: UI5 -------------------------
+  # ------------- APPLICATION: UI5 -------------------------
   - name: plantopsui
-# ------------------------------------------------------------
+    # ------------------------------------------------------------
     type: html5
     path: app/plantops-ui
     build-parameters:
@@ -114,9 +120,9 @@ modules:
       supported-platforms:
         []
 
-# ------------------ App Router -------------------------------  
+  # ------------------ App Router -------------------------------  
   - name: plantops-assistant-approuter
-# -------------------------------------------------------------
+    # -------------------------------------------------------------
     type: approuter.nodejs
     path: app/
     parameters:
@@ -124,10 +130,13 @@ modules:
       disk-quota: 1024M
       memory: 256M
     build-parameters:
+      builder: custom
+      commands:
+        - npm root
       ignore:
-      - .env
-      # - node_modules/
-      - default-env.json
+        - .env
+        - node_modules/
+        - default-env.json
     requires:
       - name: srv-api
         group: destinations
@@ -136,11 +145,17 @@ modules:
           url: ~{srv-url}
           forwardAuthToken: true
       - name: plantops-assistant-auth
+      - name: plantops-assistant-destination-service
+    provides:
+      - name: app-api
+        properties:
+          app-protocol: ${protocol}
+          app-uri: ${default-uri}
 
 resources:
-# ------------------------------------------------------------
+  # ------------------------------------------------------------
   - name: plantops-assistant-auth
-# ------------------------------------------------------------
+    # ------------------------------------------------------------
     type: org.cloudfoundry.managed-service
     parameters:
       path: ./xs-security.json
@@ -150,24 +165,24 @@ resources:
       config:
         tenant-mode: dedicated
         xsappname: plantopsapp
-# ------------------------------------------------------------
+  # ------------------------------------------------------------
   - name: plantops-assistant-db
-# ------------------------------------------------------------
+    # ------------------------------------------------------------
     type: com.sap.xs.hdi-container
     parameters:
       service: hana
       service-plan: hdi-shared
-# ------------------------------------------------------------
+  # ------------------------------------------------------------
   - name: plantops-assistant-repo-host
-# ------------------------------------------------------------
+    # ------------------------------------------------------------
     type: org.cloudfoundry.managed-service
     parameters:
       service: html5-apps-repo
       service-name: plantops-assistant-html5-app-host-service
       service-plan: app-host
-# ------------------------------------------------------------
+  # ------------------------------------------------------------
   - name: plantops-assistant-destination-service
-# ------------------------------------------------------------
+    # ------------------------------------------------------------
     type: org.cloudfoundry.managed-service
     requires:
       - name: srv-api
@@ -194,4 +209,9 @@ resources:
         version: 1.0.0
       service: destination
       service-name: plantops-assistant-destination-service
+      service-plan: lite
+  - name: rag-plantops-app-connectivity
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: connectivity
       service-plan: lite

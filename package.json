@@ -42,9 +42,11 @@
   },
   "scripts": {
     "start": "cds-serve",
+    "start-local": "cds build --production && cds deploy --to hana:plantops-db && cds watch --profile hybrid",
     "watch-plantops-ui": "cds watch --open plantops-ui/webapp/index.html?sap-ui-xx-viewCache=false",
     "undeploy": "cf undeploy rag-plantops-app --delete-services --delete-service-keys --delete-service-brokers",
     "build": "rimraf resources mta_archives && mbt build --mtar archive",
+    "build-and-deploy": "npm run build && npm run deploy",
     "deploy": "cf deploy mta_archives/archive.mtar --retries 1"
   },
   "cds": {
@@ -105,7 +107,8 @@
           "impl": "cap-llm-plugin/srv/cap-llm-plugin.js"
         },
         "destinations": true
-      }
+      },
+      "connectivity": true
     },
     "sapux": [
       "app/plantops-ui"

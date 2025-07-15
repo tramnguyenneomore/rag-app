@@ -1,22 +1,21 @@
 /* Main implementation file for handling chat */
 
 require('dotenv').config();
-const axios = require('axios');
-const https = require('https');
 const cds = require('@sap/cds');
 const { DELETE, UPDATE, SELECT } = cds.ql;
 const { storeRetrieveMessages, storeModelResponse } = require('./memory-helper');
 const xml2js = require('xml2js');
+const httpClient = require('@sap-cloud-sdk/http-client');
 
 // Constants and configurations
 const API_SERVICES = {
     EQUIPMENT: {
-        baseUrl: 'https://172.16.0.64:8443/sap/opu/odata/sap/API_EQUIPMENT',
+        baseUrl: '/sap/opu/odata/sap/API_EQUIPMENT',
         name: 'Equipment',
         keywords: ['equipment', 'machine', 'device', 'asset', 'manufacturer', 'model', 'serial number']
     },
     MAINTENANCE: {
-        baseUrl: 'https://172.16.0.64:8443/sap/opu/odata/sap/API_MAINTNOTIFICATION',
+        baseUrl: '/sap/opu/odata/sap/API_MAINTNOTIFICATION',
         name: 'Maintenance Notification',
         keywords: ['maintenance', 'notification', 'repair', 'service', 'issue', 'problem', 'fault']
     }
@@ -37,13 +36,7 @@ let odataMetadataCache = {};
 let odataEntityMap = {};
 
 async function fetchODataMetadata(serviceUrl) {
-    const username = process.env.ODATA_API_USERNAME;
-    const password = process.env.ODATA_API_PASSWORD;
-    const response = await axios.get(`${serviceUrl}/$metadata`, {
-        auth: { username, password },
-        headers: { 'Accept': 'application/xml' },
-        httpsAgent: new https.Agent({ rejectUnauthorized: false })
-    });
+    const response = await httpClient.executeHttpRequest({ destinationName: 'NEOS4HANA_PM' }, { method: 'GET', url: `${serviceUrl}/$metadata` })
     const xml = response.data;
     const parser = new xml2js.Parser();
     const metadata = await parser.parseStringPromise(xml);
@@ -215,35 +208,37 @@ JSON:`;
 async function handleDynamicEntityQuery(entitySet, intent, properties, entityMap, service) {
     if (!entitySet || !entityMap[entitySet]) throw new Error('Unknown entity set');
     const entityInfo = entityMap[entitySet];
-    
+
     // Build OData filter string from properties
     const filters = Object.entries(properties)
         .filter(([k, v]) => v !== null && v !== undefined && v !== '')
         .map(([k, v]) => `substringof('${v}', ${k})`)
         .join(' and ');
-    
+
     const baseUrl = `${service.baseUrl}/${entitySet}`;
     const url = filters ? `${baseUrl}?$filter=${filters}&$format=json` : `${baseUrl}?$format=json`;
-    
+
     console.log('[DEBUG] OData Query URL:', url);
     console.log('[DEBUG] OData Filters:', filters);
-    
+
     const username = process.env.ODATA_API_USERNAME;
     const password = process.env.ODATA_API_PASSWORD;
-    
+
     try {
-        const response = await axios.get(url, {
-            auth: { username, password },
-            headers: { 'Accept': 'application/json' },
-            httpsAgent: new https.Agent({ rejectUnauthorized: false })
-        });
-        
+        // const response = await httpClient.executeHttpRequest(url, {
+        //     auth: { username, password },
+        //     headers: { 'Accept': 'application/json' },
+        //     httpsAgent: new https.Agent({ rejectUnauthorized: false })
+        // });
+        const response = await httpClient.executeHttpRequest({ destinationName: 'NEOS4HANA_PM' }, { method: 'GET', url: url })
+
+
         const results = response.data?.d?.results;
         console.log('[DEBUG] OData Results:', results);
-        
+
         if (results && results.length > 0) {
             const entry = results[0];
-            
+
             // Format the response in a simple, readable way
             const relevantFields = Object.entries(entry)
                 .filter(([k, v]) => typeof v === 'string' && v && !k.startsWith('__'))
@@ -262,46 +257,14 @@ async function handleDynamicEntityQuery(entitySet, intent, properties, entityMap
     }
 }
 
-// --- Generic OData Query Function ---
-async function queryEquipmentOData({ filter, single, extractField, formatList }) {
-    const baseUrl = "https://172.16.0.64:8443/sap/opu/odata/sap/API_EQUIPMENT/Equipment";
-    const url = single
-        ? `${baseUrl}(${filter})?$format=json`
-        : `${baseUrl}?$filter=${filter}&$format=json`;
-    const username = process.env.ODATA_API_USERNAME;
-    const password = process.env.ODATA_API_PASSWORD;
-    try {
-        const response = await axios.get(url, {
-            auth: { username, password },
-            headers: { 'Accept': 'application/json' },
-            httpsAgent: new https.Agent({ rejectUnauthorized: false })
-        });
-        if (single) {
-            const data = response.data?.d;
-            if (data && extractField) {
-                return extractField(data);
-            }
-            return "No data found.";
-        } else {
-            const results = response.data?.d?.results;
-            if (results && results.length > 0) {
-                return formatList ? formatList(results) : JSON.stringify(results);
-            }
-            return "No data found.";
-        }
-    } catch (error) {
-        return `Error fetching data: ${error.message}`;
-    }
-}
-
 // Helper functions
 async function getServiceConfig(capllmplugin, userQuery) {
     console.log('[DEBUG] Determining service for query:', userQuery);
     const prompt = `Analyze the following user query and determine which API service it's most likely related to.
 Available services:
 ${Object.entries(API_SERVICES).map(([key, service]) =>
-    `${service.name} (${key}): Keywords - ${service.keywords.join(', ')}`
-).join('\n')}
+        `${service.name} (${key}): Keywords - ${service.keywords.join(', ')}`
+    ).join('\n')}
 
 User query: "${userQuery}"
 

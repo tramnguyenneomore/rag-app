@@ -128,6 +128,9 @@ Note:
     `cf create-service destination lite plantops-destination-service`  
     `cf create-service-key plantops-destination-service SharedDevKey`  
     `cds bind -2  plantops-destination-service:SharedDevKey`  
+3.1 Create and bind connectivity
+    `cf create-service-key rag-plantops-app-connectivity SharedDevKey`
+    `cds bind -2 rag-plantops-app-connectivity:ShareDevKey --credentials '{\"onpremise_proxy_host\" : \"localhost\"}'` 
 
 4. Build the artifacts and deploy to SAP HANA Cloud:
 
