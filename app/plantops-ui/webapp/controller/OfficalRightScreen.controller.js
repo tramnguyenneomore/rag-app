@@ -106,7 +106,7 @@ sap.ui.define([
         },
 
         loadConversationHistory(conversationID) {
-            const url = sessionStorage.getItem("isDeployedVersion")==="true"?this.getBaseURL() + `/odata/v4/chat/Conversation(${conversationID})/to_messages`:`/odata/v4/chat/Conversation(${conversationID})/to_messages`;
+            const url = `/odata/v4/chat/Conversation(${conversationID})/to_messages`;
             //const url = this.getBaseURL() + `/odata/v4/chat/Conversation(${conversationID})/to_messages`;
             //const url = `/odata/v4/chat/Conversation(${conversationID})/to_messages`;
             var oModel = new JSONModel();
@@ -220,7 +220,7 @@ sap.ui.define([
             return new Promise((resolve, reject) => {
 
                 $.ajax({
-                    url : sessionStorage.getItem("isDeployedVersion")==="true"?this.getBaseURL() + "/odata/v4/chat/getChatRagResponse":"/odata/v4/chat/getChatRagResponse",
+                    url : "/odata/v4/chat/getChatRagResponse",
                     //url: this.getBaseURL() + "/odata/v4/chat/getChatRagResponse",
                     //url: "/odata/v4/chat/getChatRagResponse",
                     type: 'POST',

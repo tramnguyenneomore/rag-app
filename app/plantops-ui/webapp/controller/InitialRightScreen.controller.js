@@ -81,6 +81,8 @@ sap.ui.define([
         },
 
         onSendMessage: function(oEvent){
+            console.log('dkm');
+            
 
             this.setBusy(true);
             this.setEnableTextArea(false);
@@ -103,6 +105,10 @@ sap.ui.define([
             this.sendMessage(payload)
             .then((oReturn) => {
                 this.setBackendResponseInToChatMessage(oReturn);
+                 // Navigate to the conversation route
+                 this.oRouter.navTo("conversation", {
+                    conversationID: conversationId
+                });                
             })
             .catch((error) => {
                 console.log(error);
@@ -118,9 +124,7 @@ sap.ui.define([
             return new Promise((resolve, reject) => {
 
                 $.ajax({
-                    // url: this.getBaseURL() + "/odata/v4/chat/getChatRagResponse",
-                    url: sessionStorage.getItem("isDeployedVersion")==="true"?this.getBaseURL() + "/odata/v4/chat/getChatRagResponse":"/odata/v4/chat/getChatRagResponse",
-                    //url: "/odata/v4/chat/getChatRagResponse",
+                    url: "/odata/v4/chat/getChatRagResponse",
                     type: 'POST',
                     contentType: 'application/json',
                     async: true,

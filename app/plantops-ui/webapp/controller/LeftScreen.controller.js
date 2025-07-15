@@ -82,7 +82,7 @@ sap.ui.define([
 
         requestConversationDelete: function (conversationID) {
             const settings = {
-                url: sessionStorage.getItem("isDeployedVersion")==="true"?this.getBaseURL() + `/odata/v4/chat/Conversation(${conversationID})`:`/odata/v4/chat/Conversation(${conversationID})`,
+                url: `/odata/v4/chat/Conversation(${conversationID})`,
                 method: "DELETE",
                 headers: {
                     "Content-type": "application/json",
@@ -174,9 +174,7 @@ sap.ui.define([
                 size: item.getFileObject().size.toString(),
             };
             const settings = {
-                url : sessionStorage.getItem("isDeployedVersion")==="true"?this.getBaseURL() + "/odata/v4/embedding-storage/Files":"/odata/v4/embedding-storage/Files",
-                //url: this.getBaseURL() + "/odata/v4/embedding-storage/Files",
-                //url:  "/odata/v4/embedding-storage/Files",
+                url: "/odata/v4/embedding-storage/Files",
                 method: "POST",
                 headers: {
                     "Content-type": "application/json"
@@ -203,7 +201,7 @@ sap.ui.define([
         },
 
         uploadContent: function (item, id) {
-            var url = sessionStorage.getItem("isDeployedVersion")==="true"?this.getBaseURL() + `/odata/v4/embedding-storage/Files(${id})/content`:`/odata/v4/embedding-storage/Files(${id})/content`;
+            var url = `/odata/v4/embedding-storage/Files(${id})/content`;
             //var url = this.getBaseURL() + `/odata/v4/embedding-storage/Files(${id})/content`;
             //var url =  `/odata/v4/embedding-storage/Files(${id})/content`;
 			item.setUploadUrl(url);	
@@ -281,9 +279,7 @@ sap.ui.define([
         requestFileDownload: function(fileID){
 
             const settings = {
-                //url: this.getBaseURL() + `/odata/v4/embedding-storage/Files(${fileID})/content`,
-                url : sessionStorage.getItem("isDeployedVersion")==="true"?this.getBaseURL() + `/odata/v4/embedding-storage/Files(${fileID})/content`:`/odata/v4/embedding-storage/Files(${fileID})/content`,
-                //url: `/odata/v4/embedding-storage/Files(${fileID})/content`,
+                url: `/odata/v4/embedding-storage/Files(${fileID})/content`,
                 method: "GET",
                 xhrFields:{
                     responseType: "blob"
@@ -339,9 +335,7 @@ sap.ui.define([
             return new Promise((resolve, reject) => {
 
                 $.ajax({
-                    url : sessionStorage.getItem("isDeployedVersion")==="true"?this.getBaseURL() + "/odata/v4/embedding-storage/storeEmbeddings":"/odata/v4/embedding-storage/storeEmbeddings",
-                    //url: this.getBaseURL() + "/odata/v4/embedding-storage/storeEmbeddings",
-                    //url:  "/odata/v4/embedding-storage/storeEmbeddings",
+                    url: "/odata/v4/embedding-storage/storeEmbeddings",
                     type: "POST",
                     contentType: 'application/json',
                     async: true,
@@ -413,9 +407,7 @@ sap.ui.define([
         requestFileDelete: function(fileID){
 
             const settings = {
-                url : sessionStorage.getItem("isDeployedVersion")==="true"?this.getBaseURL() + `/odata/v4/embedding-storage/Files(${fileID})`:`/odata/v4/embedding-storage/Files(${fileID})`,
-                //url: this.getBaseURL() + `/odata/v4/embedding-storage/Files(${fileID})`,
-                //url:  `/odata/v4/embedding-storage/Files(${fileID})`,
+                url: `/odata/v4/embedding-storage/Files(${fileID})`,
                 method: "DELETE",
             };
 
@@ -449,9 +441,7 @@ sap.ui.define([
         requestEmbeddingDelete: function(){
 
             const settings = {
-                url: sessionStorage.getItem("isDeployedVersion")==="true"?this.getBaseURL() + "/odata/v4/embedding-storage/deleteEmbeddings()": "/odata/v4/embedding-storage/deleteEmbeddings()",
-                //url: this.getBaseURL() + "/odata/v4/embedding-storage/deleteEmbeddings()",
-                //url:  "/odata/v4/embedding-storage/deleteEmbeddings()",
+                url: "/odata/v4/embedding-storage/deleteEmbeddings()",
                 method: "GET",
             };
 
