@@ -21,8 +21,8 @@
             growingScrollToLoad="true"
             width="auto"
             fixedLayout="false"
-            uploadEnabled="false"
-            uploadButtonInvisible="true"
+            uploadEnabled="true"
+            uploadButtonInvisible="false"
             items="{ 
                 path:'files>/Files',
                 parameters: {
@@ -30,7 +30,9 @@
 			    },
 			    templateShareable: false
             }"
+            beforeUploadStarts=".onBeforeUploadStart"
             selectionChange=".onSelectionChange"
+            uploadCompleted=".onUploadCompleted"
             beforeOpenContextMenu=".onBeforeOpenContextMenu">
             
             <!-- ToolBar for UploadSetwithTable -->

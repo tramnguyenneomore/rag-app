@@ -15,7 +15,7 @@
         <m:content>
 
             <!-- Left Screen - Overflow Tool Bar -->
-            <m:OverflowToolbar 
+            <m:OverflowToolbar
                 id="leftScreenOverflowToolBar"
                 height="3rem">
                 <m:Title
@@ -54,7 +54,7 @@
                     itemPress=".onConversationPress"
                     mode="Delete"
                     delete=".onHandleConversationDelete"
-                    >
+                >
                     <m:StandardListItem
                         id="_IDGenStandardListItem1"
                         type="Navigation"
@@ -62,23 +62,18 @@
                         description="{userID} | {creation_time}"
                     />
                 </m:List>
+
             </m:ScrollContainer>
 
-            <tnt:NavigationList 
+            <tnt:NavigationList
                 id="leftScreenNavigationList">
-                
+            
                 <tnt:NavigationListItem
-                    id="leftScreenFileUploadBtn" 
-                    icon="sap-icon://upload"
-                    text="Upload Files"
-                    select=".onUploadFileBtnSelect"/>
-                <tnt:NavigationListItem
-                    id="leftScreenManageFilesBtn" 
+                    id="leftScreenManageFilesBtn"
                     icon="sap-icon://collections-management"
-                    text="Manage Files" 
-                    select=".onManageFileBtnSelect"/>
+                    text="Manage Files"
+                    select=".onManageFileBtnSelect" />
             </tnt:NavigationList>
-
         </m:content>
     </m:Page>
 </mvc:View>
