@@ -15,7 +15,7 @@
             id="uploadSetWithTable"
             class="sapUiSmallMargin"
             sticky="ColumnHeaders,HeaderToolbar"
-            mode="SingleSelectLeft"
+            mode="MultiSelect"
             growing="true"
             growingThreshold="5"
             growingScrollToLoad="true"
