@@ -108,9 +108,29 @@ module.exports = function () {
 
       // Get the file content
       console.log('Retrieving file content...');
+      
+      // First, let's check what fields are actually populated
+      const fileInfo = await SELECT.from(Files).where({ ID: uuid });
+      console.log('File record fields:', JSON.stringify(fileInfo[0], null, 2));
+      
       const fileContent = await SELECT('content').from(Files).where({ ID: uuid });
-      if (!fileContent || !fileContent[0] || !fileContent[0].content) {
-        throw new Error('Failed to retrieve file content from database');
+      console.log('File content query result:', fileContent ? `Found ${fileContent.length} records` : 'null');
+      
+      if (!fileContent || fileContent.length === 0) {
+        throw new Error(`No file records found for UUID: ${uuid}`);
+      }
+      
+      if (!fileContent[0]) {
+        throw new Error(`File record is null/undefined for UUID: ${uuid}`);
+      }
+      
+      console.log('Content field type:', typeof fileContent[0].content);
+      console.log('Content field value:', fileContent[0].content === null ? 'null' : 
+                  fileContent[0].content === undefined ? 'undefined' : 
+                  `${typeof fileContent[0].content} with length: ${fileContent[0].content?.length || 'N/A'}`);
+      
+      if (!fileContent[0].content) {
+        throw new Error(`File content is ${fileContent[0].content === null ? 'null' : 'undefined'} for UUID: ${uuid}. The file may not have been uploaded yet or the upload failed.`);
       }
 
       // Convert content to buffer if it's a stream

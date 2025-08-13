@@ -105,20 +105,6 @@ sap.ui.define([
             oRouter.navTo("home");
         },
 
-        onUploadFileBtnSelect: function(oEvent){
-            if (!this.fileUploadFragment) {
-                this.fileUploadFragment = this.loadFragment({
-                    name: "plantopsassistant.view.FileUploading"
-                });
-            }
-            this.fileUploadFragment.then((oFragment) => oFragment.open());
-        },
-
-        onCloseUploadFileFragment: function(){
-
-            this.byId("fileUploadFragment").close();
-        },
-
         onManageFileBtnSelect: function(){
             if (!this.fileManagementFragment) {
                 this.fileManagementFragment = this.loadFragment({
@@ -149,12 +135,7 @@ sap.ui.define([
             
             this.createEntity(item)
                 .then((id) => {
-                    var url = `/odata/v4/embedding-storage/Files(${id})/content`;
-      
-                    item.setUploadUrl(url);	
-                    var oUploadSetWithTable = this.byId("uploadSetWithTable");
-                    oUploadSetWithTable.setHttpRequestMethod("PUT");
-                    this.onUploadCompleted(oEvent)
+                    this.uploadContent(item, id, oEvent);
                 })
                 .catch((err) => {
                     console.log(err);
@@ -163,10 +144,11 @@ sap.ui.define([
         },
 
         onUploadCompleted: function (oEvent) {
-            console.log('Upload completed, embeddings will be auto-generated');
+            console.log('Upload completed, embeddings will be auto-generated');           
+            // Get more details about the upload
+            const oItem = oEvent.getParameter("item");
 
             var oUploadSetWithTable = this.byId("uploadSetWithTable");
-            var iResponseStatus = oEvent.getParameter("status");
             
             // Remove incomplete items if method exists
             if (oUploadSetWithTable.removeAllIncompleteItems) {
@@ -178,14 +160,10 @@ sap.ui.define([
 
             setTimeout(() => {
                 oUploadSetWithTable.getBinding("items").refresh();
-                MessageToast.show("File uploaded successfully! Embeddings are generated automatically.");
             }, 1000);
-			
-        
         },
 
         createEntity: function (item) {
-            
             const data = {
                 ID: this.generateUUID(),
                 mediaType: item.getMediaType(),
@@ -219,9 +197,41 @@ sap.ui.define([
             });
         },
 
-        uploadContent: function (item, id) {
-            
-			
+        uploadContent: function (item, id, oEvent) {
+            var file = item.getFileObject(); // Blob from UploadSet
+            var url = `/odata/v4/embedding-storage/Files(${id})/content`;
+        
+            return new Promise((resolve, reject) => {
+                $.ajax({
+                    url: url,
+                    method: "PUT",
+                    processData: false, 
+                    contentType: file.type,
+                    data: file, 
+                    success: (results) => {
+                        resolve(results);
+                        this.onUploadCompleted(oEvent);
+                        this.generateVector(id);
+                    },
+                    error: (err) => {
+                        reject(err);
+                    }
+                });
+            });
+        },    
+        
+        generateVector: function(pdfFileID){
+            this.byId("fileManagementFragment").setBusy(true);
+            this.requestEmbeddingGeneration(pdfFileID)
+                .then((oReturn) => {
+                    this.byId("fileManagementFragment").setBusy(false);
+                    MessageToast.show("Embeddings generation completed successfully.");
+                })
+                .catch((error) => {
+                    console.log(error);
+                    this.byId("fileManagementFragment").setBusy(false);
+                    MessageToast.show("Embeddings generation failed, please try again.");
+                });
         },
 
         /** Event Handlers for File Management Fragment **/
@@ -311,35 +321,6 @@ sap.ui.define([
             });
         },
 
-        onGenerateVectorBtnClick: function(oEvent){
-
-            let clickedControl = oEvent.getSource();
-            let oItem = null;
-
-            // Traverse up the control hierarchy to find the ColumnListItem
-			while (clickedControl && !(clickedControl instanceof UploadSetwithTableItem)) {
-				clickedControl = clickedControl.getParent();
-			}
-			if (clickedControl instanceof UploadSetwithTableItem) {
-				oItem = clickedControl;
-			}
-
-            // Obtain File ID
-            const oAggregations = oItem.mAggregations;
-            const pdfFileID = oAggregations.cells[1].getProperty("text");
-
-            this.byId("fileManagementFragment").setBusy(true);
-            this.requestEmbeddingGeneration(pdfFileID)
-                .then((oReturn) => {
-                    this.byId("fileManagementFragment").setBusy(false);
-                    MessageToast.show("Embeddings generation completed successfully.");
-                })
-                .catch((error) => {
-                    this.byId("fileManagementFragment").setBusy(false);
-                    MessageToast.show("Embeddings generation failed, please try again.");
-                });
-        },
-
         requestEmbeddingGeneration: function(pdfFileID){
 
             const payload = JSON.stringify({
@@ -401,7 +382,6 @@ sap.ui.define([
 
                     this.byId("fileManagementFragment").setBusy(false);
                     this.byId("uploadSetWithTable").getBinding("items").refresh();
-                    this.byId("uploadSet").getBinding("items").refresh();
 
                     const oDownloadBtn = this.byId("downloadSelectedButton");
                     const oDeleteBtn = this.byId("deleteSelectedButton");
@@ -472,8 +452,7 @@ sap.ui.define([
 
         /** Event Handlers for Approuter **/
 
-        getUserInfo: function(){
-            
+        getUserInfo: function(){         
             const url = this.getBaseURL() + "/user-api/currentUser";
             var oModel = new JSONModel();
             var mock = {

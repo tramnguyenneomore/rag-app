@@ -129,13 +129,6 @@
                         <m:Text id="fileSizeText"
                             text="{path: 'files>size', formatter: '.getFileSizeWithUnits'}"
                         />
-                        <m:Button
-                            id="trainingButton"
-                            class="sapUiTinyMarginBegin"
-                            type="Transparent"
-                            icon="sap-icon://begin"
-                            press=".onGenerateVectorBtnClick"
-                        />
                     </cells>
                 </UploadSetwithTableItem>
             </items>
