@@ -23,6 +23,8 @@
             fixedLayout="false"
             uploadEnabled="true"
             uploadButtonInvisible="false"
+            multiple="true"
+            fileTypes="pdf"
             items="{ 
                 path:'files>/Files',
                 parameters: {

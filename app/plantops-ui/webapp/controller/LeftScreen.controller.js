@@ -13,8 +13,7 @@ sap.ui.define([
     
     return Controller.extend("plantopsassistant.controller.LeftScreen", {
 
-        onInit: function(){
-
+        onInit: function(){            
             // Set User Info Model
             this.getUserInfo();
 
@@ -126,28 +125,52 @@ sap.ui.define([
             
             const item = oEvent.getParameter("item");
             const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+
             
             if (item.getFileObject().size > maxSize) {
                 MessageToast.show("File size exceeds the maximum limit of 10MB");
                 this.byId("uploadSetWithTable").removeItem(item);
                 return;
             }
+            // Disable upload while file is uploading
+            this.setUploadEnabled(false);
+
+            
+            // Show busy indicator during upload
+            this.byId("fileManagementFragment").setBusy(true);
             
             this.createEntity(item)
                 .then((id) => {
-                    this.uploadContent(item, id, oEvent);
+                    // Upload is already disabled, proceed with content upload
+                    return this.uploadContent(item, id, oEvent);
                 })
                 .catch((err) => {
-                    console.log(err);
-                    MessageToast.show("Failed to upload file");
+                    console.log("Upload process failed:", err);
+                    
+                    // Clear uploading flag, re-enable upload, and hide busy indicator
+                    this.setUploadEnabled(true);
+                    this.byId("fileManagementFragment").setBusy(false);
+                    
+                    // Determine appropriate error message
+                    let errorMessage = "Failed to upload file";
+                    if (err.status === 413) {
+                        errorMessage = "File too large for upload";
+                    } else if (err.status === 0) {
+                        errorMessage = "Network error - please check your connection";
+                    } else if (err.status >= 500) {
+                        errorMessage = "Server error - please try again later";
+                    }
+                    
+                    MessageToast.show(errorMessage);
+                    // Remove the item from UI since upload failed
+                    this.byId("uploadSetWithTable").removeItem(item);
                 });
         },
 
         onUploadCompleted: function (oEvent) {
-            console.log('Upload completed, embeddings will be auto-generated');           
             // Get more details about the upload
             const oItem = oEvent.getParameter("item");
-
+            
             var oUploadSetWithTable = this.byId("uploadSetWithTable");
             
             // Remove incomplete items if method exists
@@ -155,9 +178,7 @@ sap.ui.define([
                 oUploadSetWithTable.removeAllIncompleteItems();
             }
             
-          
-            oUploadSetWithTable.getBinding("items").refresh();
-
+            
             setTimeout(() => {
                 oUploadSetWithTable.getBinding("items").refresh();
             }, 1000);
@@ -208,12 +229,24 @@ sap.ui.define([
                     processData: false, 
                     contentType: file.type,
                     data: file, 
-                    success: (results) => {
+                    success: (results) => { 
+                        // Note: Keep fragment busy during embedding generation
+                        // Upload will be re-enabled after embedding generation completes
                         resolve(results);
                         this.onUploadCompleted(oEvent);
                         this.generateVector(id);
                     },
                     error: (err) => {
+                        this.setUploadEnabled(true);
+                        console.log("Upload content failed, cleaning up entity:", err);
+                        // Clean up the orphaned entity since content upload failed
+                        this.requestFileDelete(id)
+                            .then(() => {
+                                console.log("Orphaned entity cleaned up successfully");
+                            })
+                            .catch((deleteErr) => {
+                                console.error("Failed to clean up orphaned entity:", deleteErr);
+                            });
                         reject(err);
                     }
                 });
@@ -222,14 +255,19 @@ sap.ui.define([
         
         generateVector: function(pdfFileID){
             this.byId("fileManagementFragment").setBusy(true);
+            
             this.requestEmbeddingGeneration(pdfFileID)
                 .then((oReturn) => {
                     this.byId("fileManagementFragment").setBusy(false);
+                    // Re-enable upload after embedding generation completes
+                    this.setUploadEnabled(true);
                     MessageToast.show("Embeddings generation completed successfully.");
                 })
                 .catch((error) => {
                     console.log(error);
                     this.byId("fileManagementFragment").setBusy(false);
+                    // Re-enable upload even if embedding generation fails
+                    this.setUploadEnabled(true);
                     MessageToast.show("Embeddings generation failed, please try again.");
                 });
         },
@@ -486,6 +524,15 @@ sap.ui.define([
             var appModulePath = jQuery.sap.getModulePath(appPath);
 
             return appModulePath;
-        }, 
+        },
+
+        /** Helper Methods **/
+        
+        setUploadEnabled: function(enabled) {
+            var oUploadSetWithTable = this.byId("uploadSetWithTable");
+            if (oUploadSetWithTable) {
+                oUploadSetWithTable.setUploadEnabled(enabled);
+            }
+        }
     });
 });
