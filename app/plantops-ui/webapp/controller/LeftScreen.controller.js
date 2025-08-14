@@ -407,32 +407,90 @@ sap.ui.define([
         },
 
         onDeleteFiles: function(oEvent){
-
-            this.byId("fileManagementFragment").setBusy(true);
             const oUploadSetTable = this.byId("uploadSetWithTable");
-			const oItem = oUploadSetTable.getSelectedItem();
-            const oAggregations = oItem.mAggregations;
-            const fileID = oAggregations.cells[1].getProperty("text");
-            const fileName = oItem.getProperty("fileName");
+            const aSelectedItems = oUploadSetTable.getSelectedItems();
+            
+            if (aSelectedItems.length === 0) {
+                MessageToast.show("Please select files to delete");
+                return;
+            }
 
-            this.requestFileDelete(fileID)
-                .then((result) => {
+            // Show confirmation dialog
+            const fileCount = aSelectedItems.length;
+            const message = fileCount === 1 ? 
+                "Are you sure you want to delete this file?" : 
+                `Are you sure you want to delete ${fileCount} files?`;
+            
+            MessageBox.warning(message, {
+                icon: MessageBox.Icon.WARNING,
+                actions: ["Delete", MessageBox.Action.CANCEL],
+                emphasizedAction: "Delete",
+                initialFocus: MessageBox.Action.CANCEL,
+                onClose: (sAction) => {
+                    if (sAction === "Delete") {
+                        this._performMultipleFilesDeletion(aSelectedItems);
+                    }
+                }
+            });
+        },
 
+        _performMultipleFilesDeletion: function(aSelectedItems) {
+            this.byId("fileManagementFragment").setBusy(true);
+            
+            // Extract file information from selected items
+            const filesToDelete = aSelectedItems.map(oItem => {
+                const oAggregations = oItem.mAggregations;
+                const fileID = oAggregations.cells[1].getProperty("text");
+                const fileName = oItem.getProperty("fileName");
+                return { fileID, fileName };
+            });
+
+            // Create deletion promises for all files
+            const deletionPromises = filesToDelete.map(file => 
+                this.requestFileDelete(file.fileID)
+                    .then(() => ({ success: true, file }))
+                    .catch((error) => ({ success: false, file, error }))
+            );
+
+            // Execute all deletions in parallel
+            Promise.all(deletionPromises)
+                .then((results) => {
                     this.byId("fileManagementFragment").setBusy(false);
                     this.byId("uploadSetWithTable").getBinding("items").refresh();
 
+                    // Disable buttons after deletion
                     const oDownloadBtn = this.byId("downloadSelectedButton");
                     const oDeleteBtn = this.byId("deleteSelectedButton");
                     oDownloadBtn.setEnabled(false);
                     oDeleteBtn.setEnabled(false);
 
-                    MessageToast.show(`File ${fileName} with ID ${fileID} successfully deleted`);			
+                    // Process results and show appropriate messages
+                    const successCount = results.filter(r => r.success).length;
+                    const failureCount = results.filter(r => !r.success).length;
+                    
+                    if (failureCount === 0) {
+                        const message = successCount === 1 ? 
+                            `File ${results[0].file.fileName} successfully deleted` :
+                            `${successCount} files successfully deleted`;
+                        MessageToast.show(message);
+                    } else if (successCount === 0) {
+                        const message = failureCount === 1 ?
+                            `Failed to delete file ${results[0].file.fileName}` :
+                            `Failed to delete ${failureCount} files`;
+                        MessageToast.show(message);
+                    } else {
+                        MessageToast.show(`${successCount} files deleted successfully, ${failureCount} failed`);
+                        // Log failures for debugging
+                        results.filter(r => !r.success).forEach(r => {
+                            console.error(`Failed to delete file ${r.file.fileName} (ID: ${r.file.fileID}):`, r.error);
+                        });
+                    }
                 })
                 .catch((error) => {
-
-                    console.log(error.message);
-                    this.byId("fileManagementFragment").setBusy(false);	
-                    MessageToast.show(`File ${fileName} with ID ${fileID} deletion failed`);
+                    // This shouldn't happen since we handle errors in individual promises
+                    console.error("Unexpected error in batch deletion:", error);
+                    this.byId("fileManagementFragment").setBusy(false);
+                    MessageToast.show("An unexpected error occurred during file deletion");
                 });
         },
 
