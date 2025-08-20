@@ -71,7 +71,7 @@ module.exports = function () {
           throw new Error('Failed to connect to CAP LLM plugin - null connection');
         }
         console.log('CAP LLM plugin connection established');
-        console.log('Plugin configuration:', JSON.stringify(cds.env.requires["cap-llm-plugin"]));
+
       } catch (error) {
         console.error('Error connecting to CAP LLM plugin:', error);
         console.error('Plugin configuration:', JSON.stringify(cds.env.requires["cap-llm-plugin"]));
@@ -111,10 +111,10 @@ module.exports = function () {
       
       // First, let's check what fields are actually populated
       const fileInfo = await SELECT.from(Files).where({ ID: uuid });
-      console.log('File record fields:', JSON.stringify(fileInfo[0], null, 2));
+
       
       const fileContent = await SELECT('content').from(Files).where({ ID: uuid });
-      console.log('File content query result:', fileContent ? `Found ${fileContent.length} records` : 'null');
+
       
       if (!fileContent || fileContent.length === 0) {
         throw new Error(`No file records found for UUID: ${uuid}`);
@@ -124,10 +124,7 @@ module.exports = function () {
         throw new Error(`File record is null/undefined for UUID: ${uuid}`);
       }
       
-      console.log('Content field type:', typeof fileContent[0].content);
-      console.log('Content field value:', fileContent[0].content === null ? 'null' : 
-                  fileContent[0].content === undefined ? 'undefined' : 
-                  `${typeof fileContent[0].content} with length: ${fileContent[0].content?.length || 'N/A'}`);
+
       
       if (!fileContent[0].content) {
         throw new Error(`File content is ${fileContent[0].content === null ? 'null' : 'undefined'} for UUID: ${uuid}. The file may not have been uploaded yet or the upload failed.`);
@@ -168,17 +165,30 @@ module.exports = function () {
       const textChunks = await splitter.splitDocuments(document);
       console.log(`Documents split into ${textChunks.length} chunks.`);
 
+      // Create a mapping from original documents to page numbers for fallback
+      const pageContentToPageMap = new Map();
+      document.forEach((doc, index) => {
+        let pageNum = null;
+        if (doc.metadata && doc.metadata.page !== undefined) {
+          pageNum = doc.metadata.page;
+        } else if (doc.metadata && doc.metadata.loc && doc.metadata.loc.pageNumber !== undefined) {
+          pageNum = doc.metadata.loc.pageNumber;
+        }
+        
+        if (pageNum !== null) {
+          pageContentToPageMap.set(doc.pageContent, pageNum);
+        }
+      });
+
+
       console.log("Generating embeddings for text chunks...");
       // For each text chunk generate the embeddings
       for (const chunk of textChunks) {
         console.log('Processing chunk:', chunk.pageContent.substring(0, 50) + '...');
         const embeddingModelConfig = cds.env.requires["gen-ai-hub"][embeddingModelName];
-        console.log('Embedding model config:', JSON.stringify(embeddingModelConfig));
         
         try {
-          console.log('Calling getEmbeddingWithConfig...');
           const embeddingResult = await capllmplugin.getEmbeddingWithConfig(embeddingModelConfig, chunk.pageContent);
-          console.log('Raw embedding result:', JSON.stringify(embeddingResult));
           
           let embedding = null;
           if (embeddingModelName === "text-embedding-ada-002") {
@@ -191,14 +201,38 @@ module.exports = function () {
               console.error('No embedding found in result:', embeddingResult);
               throw new Error('Failed to get embedding from result');
             }
-            console.log('Successfully extracted embedding of length:', embedding.length);
+
           } else {
             throw new Error(`Embedding model ${embeddingModelName} not supported!\n`);
           }
 
+          // Extract page number from chunk metadata or fallback to mapping
+          let pageNumber = null;
+          
+          // Try different possible locations for page information
+          if (chunk.metadata && chunk.metadata.page !== undefined) {
+            pageNumber = chunk.metadata.page;
+
+          } else if (chunk.metadata && chunk.metadata.loc && chunk.metadata.loc.pageNumber !== undefined) {
+            pageNumber = chunk.metadata.loc.pageNumber;
+
+          } else {
+            // Fallback: try to find page by matching chunk content with original documents
+            for (const [pageContent, page] of pageContentToPageMap.entries()) {
+              if (chunk.pageContent.includes(pageContent.substring(0, 100)) || 
+                  pageContent.includes(chunk.pageContent.substring(0, 100))) {
+                pageNumber = page;
+
+                break;
+              }
+            }
+          }
+
+
           const entry = {
             "text_chunk": chunk.pageContent,
             "metadata_column": fileNameString,
+            "page": pageNumber,
             "embedding": array2VectorBuffer(embedding)
           };
           textChunkEntries.push(entry);

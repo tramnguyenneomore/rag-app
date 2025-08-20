@@ -25,13 +25,13 @@ entity Message {
     creation_time: Timestamp;
 }
 
-entity DocumentChunk
-{
-    text_chunk: LargeString;
-    metadata_column: String(5000);
-    embedding: Vector(1536);
+entity DocumentChunk {
+    key ID          : UUID;
+    text_chunk      : LargeString;
+    metadata_column : String(5000);
+    page            : Integer;
+    embedding       : Vector(1536);
 }
-
 
 entity Files: cuid, managed{
     @Core.MediaType: mediaType @Core.ContentDisposition.Filename: fileName
