@@ -67,11 +67,6 @@
                         text="Delete"
                         enabled="false"
                         press=".onDeleteFiles"/>
-                    <m:Button
-                        id="deleteEmbeddingSelectedButton"
-                        text="Delete Embeddings"
-                        enabled="true"
-                        press=".onDeleteEmbedding"/>
                 </m:OverflowToolbar>
             </headerToolbar>
 
@@ -95,11 +90,6 @@
                 <Column id="fileSize">
                     <header>
                         <m:Label id="labelForFileSize" text="File Size" />
-                    </header>
-                </Column>
-                <Column id="actionButton" importance="High" >
-                    <header>
-                        <m:Label id="labelForActionButton" text="Generate Embeddings" />
                     </header>
                 </Column>
             </columns>

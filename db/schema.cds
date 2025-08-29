@@ -31,14 +31,17 @@ entity DocumentChunk {
     metadata_column : String(5000);
     page            : Integer;
     embedding       : Vector(1536);
+    file_ID         : Association to Files;
 }
 
-entity Files: cuid, managed{
+entity Files: cuid, managed {
     @Core.MediaType: mediaType @Core.ContentDisposition.Filename: fileName
     content: LargeBinary;
     @Core.IsMediaType: true
     mediaType: String;
     fileName: String;
     size: String;
+    chunks   : Composition of many DocumentChunk on chunks.file_ID = $self;
 }
+
 

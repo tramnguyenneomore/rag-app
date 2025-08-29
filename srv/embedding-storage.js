@@ -1,7 +1,7 @@
 /* Helper file to process and store vector embeddings in HANA Cloud */
 
 const cds = require('@sap/cds');
-const { INSERT, DELETE, SELECT } = cds.ql;
+const { INSERT, DELETE, SELECT, UPDATE } = cds.ql;
 const { RecursiveCharacterTextSplitter } = require("langchain/text_splitter");
 const fs = require('fs');
 const path = require('path');
@@ -233,7 +233,8 @@ module.exports = function () {
             "text_chunk": chunk.pageContent,
             "metadata_column": fileNameString,
             "page": pageNumber,
-            "embedding": array2VectorBuffer(embedding)
+            "embedding": array2VectorBuffer(embedding),
+            "file_ID_ID": uuid  // Set the file association properly
           };
           textChunkEntries.push(entry);
         } catch (error) {
@@ -243,6 +244,8 @@ module.exports = function () {
       }
 
       console.log("Inserting text chunks with embeddings into SAP HANA Cloud's vector engine...");
+      console.log(`[EMBEDDING CREATION] About to insert ${textChunkEntries.length} chunks for file ID: ${uuid}`);
+      
       // Insert the text chunk with embeddings into db
       const insertStatus = await INSERT.into(DocumentChunk).entries(textChunkEntries);
       if (!insertStatus) {
@@ -260,14 +263,190 @@ module.exports = function () {
     return "Embeddings stored successfully!";
   });
 
+  // Global embedding deletion function - USE WITH CAUTION
+  // This deletes ALL embeddings in the system, not just for specific files
+  // Individual file deletions now automatically cascade delete their embeddings
   this.on('deleteEmbeddings', async () => {
     try {
-      console.log('Deleting embeddings...');
+      console.log('[GLOBAL DELETE] Deleting ALL embeddings in the system...');
       const { DocumentChunk } = this.entities;
+      const countBefore = await SELECT.from(DocumentChunk, ['ID']);
+      console.log(`[GLOBAL DELETE] Found ${countBefore.length} total embeddings to delete`);
+      
       await DELETE.from(DocumentChunk);
-      return "Success!";
+      
+      console.log('[GLOBAL DELETE] All embeddings deleted successfully');
+      return `Success! Deleted ${countBefore.length} embeddings.`;
     } catch (error) {
-      console.error('Error while deleting the embeddings content in db:', error);
+      console.error('[GLOBAL DELETE] Error while deleting all embeddings:', error);
+      throw error;
+    }
+  });
+
+  // Handle DELETE events for Files entity to ensure cascade delete of DocumentChunk
+  this.before('DELETE', 'Files', async (req) => {
+    try {
+      const { Files, DocumentChunk } = this.entities;
+      const fileIds = [];
+      
+      // Handle individual file deletion by ID (e.g., DELETE /Files(id))
+      if (req.params && req.params.length > 0) {
+        const fileId = req.params[0].ID || req.params[0];
+        if (fileId) {
+          fileIds.push(fileId);
+        }
+      }
+      // Handle query-based deletion (e.g., DELETE FROM Files WHERE ...)
+      else if (req.query && req.query.SELECT && req.query.SELECT.where) {
+        const whereClause = req.query.SELECT.where;
+        
+        // Handle different types of where clauses
+        if (Array.isArray(whereClause)) {
+          // Complex where clause - find ID conditions
+          for (const condition of whereClause) {
+            if (condition.ref && condition.ref[0] === 'ID' && condition.val) {
+              fileIds.push(condition.val);
+            }
+          }
+        } else if (whereClause.ref && whereClause.ref[0] === 'ID' && whereClause.val) {
+          // Simple where clause
+          fileIds.push(whereClause.val);
+        }
+        
+        // If we couldn't extract IDs from where clause, get all files that match the query
+        if (fileIds.length === 0) {
+          const filesToDelete = await SELECT.from(Files, ['ID']).where(req.query.SELECT.where);
+          fileIds.push(...filesToDelete.map(file => file.ID));
+        }
+      }
+      
+      // Delete associated DocumentChunk records for each file
+      if (fileIds.length > 0) {
+        console.log(`[CASCADE DELETE] Processing ${fileIds.length} file(s) for DocumentChunk cleanup...`);
+        
+        for (const fileId of fileIds) {
+          // Count chunks before deletion for logging
+          // Use the correct association field name that CAP generates
+          const chunkCount = await SELECT.from(DocumentChunk).where({ file_ID_ID: fileId });
+          console.log(`[CASCADE DELETE] Found ${chunkCount.length} DocumentChunk records for file ${fileId}`);
+          
+          if (chunkCount.length > 0) {
+            // Delete the chunks using the correct field name
+            await DELETE.from(DocumentChunk).where({ file_ID_ID: fileId });
+            console.log(`[CASCADE DELETE] Successfully deleted ${chunkCount.length} DocumentChunk records for file ${fileId}`);
+          }
+        }
+      }
+      
+    } catch (error) {
+      console.error('[CASCADE DELETE] Error during DocumentChunk cleanup:', error);
+      // Log error but don't throw to avoid blocking the file deletion
+      // The composition should handle the cascade delete as fallback
+    }
+  });
+
+  // Function to clean up orphaned DocumentChunk records (chunks without corresponding files)
+  this.on('cleanupOrphanedChunks', async () => {
+    try {
+      console.log('Starting cleanup of orphaned DocumentChunk records...');
+      const { Files, DocumentChunk } = this.entities;
+      
+      // Find all DocumentChunk records
+      const allChunks = await SELECT.from(DocumentChunk, ['ID', 'file_ID_ID', 'metadata_column']);
+      console.log(`Found ${allChunks.length} total DocumentChunk records`);
+      
+      if (allChunks.length === 0) {
+        return "No DocumentChunk records found.";
+      }
+      
+      // Get all existing file IDs
+      const existingFiles = await SELECT.from(Files, ['ID']);
+      const existingFileIds = new Set(existingFiles.map(file => file.ID));
+      console.log(`Found ${existingFileIds.size} existing Files records`);
+      
+      // Find orphaned chunks (chunks whose file_ID_ID doesn't exist in Files table)
+      const orphanedChunks = allChunks.filter(chunk => 
+        chunk.file_ID_ID && !existingFileIds.has(chunk.file_ID_ID)
+      );
+      
+      console.log(`Found ${orphanedChunks.length} orphaned DocumentChunk records`);
+      
+      if (orphanedChunks.length === 0) {
+        return `Cleanup complete. No orphaned chunks found. Total chunks: ${allChunks.length}`;
+      }
+      
+      // Delete orphaned chunks
+      for (const chunk of orphanedChunks) {
+        await DELETE.from(DocumentChunk).where({ ID: chunk.ID });
+        console.log(`Deleted orphaned chunk ${chunk.ID} (file_ID: ${chunk.file_ID_ID}, metadata: ${chunk.metadata_column})`);
+      }
+      
+      const remainingChunks = await SELECT.from(DocumentChunk, ['ID']);
+      
+      return `Cleanup complete. Deleted ${orphanedChunks.length} orphaned chunks. Remaining chunks: ${remainingChunks.length}`;
+      
+    } catch (error) {
+      console.error('Error during orphaned chunk cleanup:', error);
+      throw error;
+    }
+  });
+
+  // Function to fix existing DocumentChunk records that have null file_ID_ID
+  // This is a one-time migration function
+  this.on('fixNullFileIds', async () => {
+    try {
+      console.log('Starting fix for DocumentChunk records with null file_ID_ID...');
+      const { Files, DocumentChunk } = this.entities;
+      
+      // Find all DocumentChunk records with null file_ID_ID but have metadata_column
+      const chunksWithNullFileId = await SELECT.from(DocumentChunk, ['ID', 'metadata_column']).where({ file_ID_ID: null });
+      console.log(`Found ${chunksWithNullFileId.length} DocumentChunk records with null file_ID_ID`);
+      
+      if (chunksWithNullFileId.length === 0) {
+        return "No DocumentChunk records with null file_ID_ID found.";
+      }
+      
+      let fixedCount = 0;
+      let unfixableCount = 0;
+      
+      // Group chunks by metadata_column (filename)
+      const chunksByFilename = {};
+      chunksWithNullFileId.forEach(chunk => {
+        if (!chunksByFilename[chunk.metadata_column]) {
+          chunksByFilename[chunk.metadata_column] = [];
+        }
+        chunksByFilename[chunk.metadata_column].push(chunk);
+      });
+      
+      // For each filename, try to find the corresponding file and update chunks
+      for (const [filename, chunks] of Object.entries(chunksByFilename)) {
+        console.log(`Processing ${chunks.length} chunks for file: ${filename}`);
+        
+        // Find the file with this filename
+        const matchingFiles = await SELECT.from(Files, ['ID']).where({ fileName: filename });
+        
+        if (matchingFiles.length === 1) {
+          // Update all chunks for this file
+          const fileId = matchingFiles[0].ID;
+          console.log(`Updating ${chunks.length} chunks to file ID: ${fileId}`);
+          
+          for (const chunk of chunks) {
+            await UPDATE(DocumentChunk).set({ file_ID_ID: fileId }).where({ ID: chunk.ID });
+            fixedCount++;
+          }
+        } else if (matchingFiles.length === 0) {
+          console.log(`No file found for filename: ${filename}, cannot fix ${chunks.length} chunks`);
+          unfixableCount += chunks.length;
+        } else {
+          console.log(`Multiple files found for filename: ${filename}, cannot fix ${chunks.length} chunks`);
+          unfixableCount += chunks.length;
+        }
+      }
+      
+      return `Fix complete. Fixed ${fixedCount} chunks, ${unfixableCount} chunks could not be fixed automatically.`;
+      
+    } catch (error) {
+      console.error('Error during null file_ID fix:', error);
       throw error;
     }
   });

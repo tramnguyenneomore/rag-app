@@ -20,5 +20,7 @@ service EmbeddingStorageService @(requires: 'authenticated-user') {
 
   action   storeEmbeddings(uuid : String) returns String;
   function deleteEmbeddings()             returns String;
+  function cleanupOrphanedChunks()        returns String;
+  function fixNullFileIds()               returns String;
 
 }

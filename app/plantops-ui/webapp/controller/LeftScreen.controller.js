@@ -512,39 +512,7 @@ sap.ui.define([
             });
         },
 
-        onDeleteEmbedding: function(oEvent){
 
-            this.byId("fileManagementFragment").setBusy(true);
-            this.requestEmbeddingDelete()
-            .then((result) => {
-                this.byId("fileManagementFragment").setBusy(false);
-                MessageToast.show(`All embeddings successfully deleted.`);			
-            })
-            .catch((error) => {
-
-                console.log(error.message);
-                this.byId("fileManagementFragment").setBusy(false);	
-                MessageToast.show(`Embeddings deletion failed.`);
-            });
-        },
-
-        requestEmbeddingDelete: function(){
-
-            const settings = {
-                url: "/odata/v4/embedding-storage/deleteEmbeddings()",
-                method: "GET",
-            };
-
-            return new Promise((resolve, reject) => {
-                $.ajax(settings)
-                .done((result, textStatus, request) => {
-                    resolve(result);
-                })
-                .fail((err) => {
-                    reject(err);
-                })
-            });
-        },
 
         /** Event Handlers for Approuter **/
 
