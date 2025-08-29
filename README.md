@@ -121,7 +121,7 @@ Note:
 
     `cf create-service hana hdi-shared plantops-db`    
     `cf create-service-key plantops-db  SharedDevKey`   
-    `cds bind -2  plantops-db:SharedDevKey`  
+    `cds bind -2 plantops-db:SharedDevKey`  
 
 3. Create and bind the destination service to the CAP application as follows (which you would have done in the pre-requisites section):  
      Note: Please wait for the service instance and service key creation to complete before you run the next command (which generally takes sometime).      
@@ -130,7 +130,7 @@ Note:
     `cds bind -2  plantops-destination-service:SharedDevKey`  
 3.1 Create and bind connectivity
     `cf create-service-key rag-plantops-app-connectivity SharedDevKey`
-    `cds bind -2 rag-plantops-app-connectivity:ShareDevKey --credentials '{\"onpremise_proxy_host\" : \"localhost\"}'` 
+    `cds bind -2 rag-plantops-app-connectivity:SharedDevKey --credentials '{\"onpremise_proxy_host\" : \"localhost\"}'` 
 
 4. Build the artifacts and deploy to SAP HANA Cloud:
 
@@ -150,6 +150,30 @@ Use the following credentials to login:
 user: dummy.user@com
 password: initial
 ```
+
+### Troubleshooting Hybrid Testing
+
+If you encounter database connection errors like "authentication failed" or "Could not establish connection for tenant", ensure your service bindings are correct:
+
+1. **Check your service keys exist:**
+   ```
+   cf service-keys plantops-db
+   cf service-keys plantops-destination-service
+   cf service-keys rag-plantops-app-connectivity
+   ```
+
+2. **Verify correct bindings in `.cdsrc-private.json`:**
+   - Database should use `SharedDevKey`
+   - All service bindings should point to the correct keys
+
+3. **Re-bind services if needed:**
+   ```
+   cds bind -2 plantops-db:SharedDevKey
+   cds bind -2 plantops-destination-service:SharedDevKey
+   cds bind -2 rag-plantops-app-connectivity:SharedDevKey --credentials '{"onpremise_proxy_host" : "localhost"}'
+   ```
+
+4. **If you get 401 Unauthorized errors**, ensure you're accessing the application through the login link provided in the console output when running `cds watch --profile hybrid`.
 
 ## Deploy on SAP BTP:
 
