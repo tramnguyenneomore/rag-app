@@ -120,15 +120,16 @@ Note:
     Note: Please wait for the service instance and service key creation to complete before you run the next command (which generally takes sometime).   
 
     `cf create-service hana hdi-shared plantops-db`    
-    `cf create-service-key plantops-db  SharedDevKey`   
+    `cf create-service-key plantops-db SharedDevKey`   
     `cds bind -2 plantops-db:SharedDevKey`  
 
 3. Create and bind the destination service to the CAP application as follows (which you would have done in the pre-requisites section):  
      Note: Please wait for the service instance and service key creation to complete before you run the next command (which generally takes sometime).      
     `cf create-service destination lite plantops-destination-service`  
     `cf create-service-key plantops-destination-service SharedDevKey`  
-    `cds bind -2  plantops-destination-service:SharedDevKey`  
+    `cds bind -2 plantops-destination-service:SharedDevKey`  
 3.1 Create and bind connectivity
+    `cf create-service connectivity lite rag-plantops-app-connectivity`
     `cf create-service-key rag-plantops-app-connectivity SharedDevKey`
     `cds bind -2 rag-plantops-app-connectivity:SharedDevKey --credentials '{\"onpremise_proxy_host\" : \"localhost\"}'` 
 
@@ -201,7 +202,6 @@ Note: After deployment, please ensure you complete step 2 of the pre-requisite s
 Note: To access the UI of the deployed BTP app, navigate to the subaccount and click on the HTML5 applications and select "plantopsassistant".
 
 ![BTP-ui-link](./docs/images/BTP-login.png)
-
 
 ## How to use the application:
 
